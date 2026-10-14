@@ -8,7 +8,7 @@
 //   DAYS              quantos dias para trás atualizar (padrão 3)
 //   MGID_API / GITHUB_API  só para testes
 
-const TOKEN = process.env.MGID_TOKEN;
+const TOKEN = String(process.env.MGID_TOKEN || '').trim().replace(/^Bearer\s+/i, '');
 const CLIENT = process.env.MGID_CLIENT_ID || '996870';
 const GH_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = process.env.GITHUB_REPOSITORY;
@@ -28,18 +28,25 @@ const days = []; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i));
 const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
 /* ---------- API da MGID ---------- */
-let authMode = 'header';
+// A doc pede "Authorization: Bearer {token}"; testamos também o token puro no cabeçalho e ?token=,
+// e guardamos o formato que funcionar. Em caso de recusa, mostramos a mensagem da MGID (o GitHub mascara o token).
+const AUTH = [
+  { name: 'Bearer', h: t => ({ Authorization: `Bearer ${t}` }) },
+  { name: 'cabeçalho puro', h: t => ({ Authorization: t }) },
+  { name: '?token=', q: true },
+];
+let authIdx = null;
 async function mgid(path, params = {}) {
-  const q = new URLSearchParams(params);
-  for (const mode of authMode === 'header' ? ['header', 'query'] : ['query']) {
-    const qs = new URLSearchParams(q); if (mode === 'query') qs.set('token', TOKEN);
-    const headers = { Accept: 'application/json' }; if (mode === 'header') headers.Authorization = `Bearer ${TOKEN}`;
-    const r = await fetch(`${API}${path}?${qs}`, { headers });
-    if (r.status === 401 || r.status === 403) { if (mode === 'header') continue; throw new Error(`MGID recusou o token (HTTP ${r.status}). Confira o segredo MGID_TOKEN.`); }
-    if (!r.ok) throw new Error(`MGID ${path}: HTTP ${r.status}`);
-    authMode = mode;
-    return r.json();
+  const tried = [];
+  for (const i of authIdx == null ? AUTH.keys() : [authIdx]) {
+    const m = AUTH[i], qs = new URLSearchParams(params); if (m.q) qs.set('token', TOKEN);
+    const r = await fetch(`${API}${path}?${qs}`, { headers: { Accept: 'application/json', ...(m.h ? m.h(TOKEN) : {}) } });
+    if (r.ok) { authIdx = i; return r.json(); }
+    let msg = ''; try { msg = (await r.text()).replace(/\s+/g, ' ').slice(0, 220); } catch {}
+    tried.push(`${m.name} → HTTP ${r.status}${msg ? ' ' + msg : ''}`);
+    if (r.status !== 401 && r.status !== 403) break;
   }
+  throw new Error(`MGID ${path} recusou: ${tried.join(' | ')}`);
 }
 const isStat = o => o && typeof o === 'object' && !Array.isArray(o) && ['spent', 'clicks', 'imps'].some(k => k in o);
 // Encontra {campaignId: {spent, clicks, ...}} em qualquer nível da resposta.
