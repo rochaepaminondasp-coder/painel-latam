@@ -1,0 +1,174 @@
+// Robô de vendas: busca as vendas na Ratoeira Ads (via MCP) e grava no data.json do painel.
+// Roda no GitHub Actions. Não imprime dados de clientes (os logs do repositório são públicos).
+//
+// Variáveis de ambiente:
+//   RATOEIRA_MCP_URL  URL completa do MCP da Ratoeira, com ?token=...   (segredo do repositório)
+//   GITHUB_TOKEN      token do próprio Actions (permissão contents: write)
+//   GITHUB_REPOSITORY dono/repositorio (o Actions preenche sozinho)
+//   DAYS              quantos dias para trás atualizar (padrão 3: ontem, anteontem e o dia anterior)
+//   PLATFORM          código da plataforma no painel (padrão MG = MGID)
+//   GITHUB_API / FX_API  só para testes
+
+const MCP_URL = process.env.RATOEIRA_MCP_URL;
+const GH_TOKEN = process.env.GITHUB_TOKEN;
+const REPO = process.env.GITHUB_REPOSITORY;
+const DAYS = Math.max(1, Math.min(10, Number(process.env.DAYS || 3)));
+const PLATFORM = process.env.PLATFORM || 'MG';
+const GH_API = process.env.GITHUB_API || 'https://api.github.com';
+const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
+const TZ_OFFSET_H = -3; // horário de Brasília
+
+if (!MCP_URL) { console.error('Falta o segredo RATOEIRA_MCP_URL (Settings → Secrets and variables → Actions).'); process.exit(1); }
+if (!GH_TOKEN || !REPO) { console.error('Falta GITHUB_TOKEN / GITHUB_REPOSITORY.'); process.exit(1); }
+
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+const localNow = () => new Date(Date.now() + TZ_OFFSET_H * 3600e3);
+const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return ymd(d); };
+// "2026-10-13 19:39:22 -03:00" -> "2026-10-13" no horário de Brasília
+function localDate(createdAt) {
+  const m = String(createdAt || '').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\s*([+-]\d{2}:?\d{2}|Z))?/);
+  if (!m) return null;
+  let off = m[3] || '-03:00'; if (off !== 'Z' && !off.includes(':')) off = off.slice(0, 3) + ':' + off.slice(3);
+  const t = Date.parse(`${m[1]}T${m[2]}${off === 'Z' ? 'Z' : off}`);
+  return isNaN(t) ? null : ymd(new Date(t + TZ_OFFSET_H * 3600e3));
+}
+
+/* ---------- cliente MCP (HTTP streamable) ---------- */
+let sessionId = null, rpcId = 0;
+async function mcp(method, params, notify = false) {
+  const body = { jsonrpc: '2.0', method, params };
+  if (!notify) body.id = ++rpcId;
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+  if (sessionId) headers['mcp-session-id'] = sessionId;
+  const r = await fetch(MCP_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+  const sid = r.headers.get('mcp-session-id'); if (sid) sessionId = sid;
+  if (notify) return null;
+  const txt = await r.text();
+  if (!r.ok) throw new Error(`MCP ${method}: HTTP ${r.status}`);
+  let msg = null;
+  if ((r.headers.get('content-type') || '').includes('text/event-stream') || /^(event|data):/m.test(txt)) {
+    for (const line of txt.split(/\r?\n/)) {
+      if (!line.startsWith('data:')) continue;
+      try { const j = JSON.parse(line.slice(5).trim()); if (j.id === body.id) msg = j; } catch {}
+    }
+  } else msg = JSON.parse(txt);
+  if (!msg) throw new Error(`MCP ${method}: resposta vazia`);
+  if (msg.error) throw new Error(`MCP ${method}: ${msg.error.message || 'erro'}`);
+  return msg.result;
+}
+function toolJson(result) {
+  const text = (result?.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+  if (result?.isError) throw new Error('A Ratoeira recusou a consulta: ' + text.slice(0, 200));
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if (a < 0) throw new Error('Resposta da Ratoeira sem JSON');
+  return JSON.parse(text.slice(a, b + 1));
+}
+async function fetchSales(from, to) {
+  await mcp('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'painel-latam', version: '1.0' } });
+  await mcp('notifications/initialized', {}, true);
+  const all = [], limit = 200;
+  for (let page = 1; page <= 50; page++) {
+    const res = await mcp('tools/call', { name: 'get_postback_vendas_by_cliente', arguments: {
+      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:59`, timezone: 'America/Sao_Paulo', format: 'json', page, limit } });
+    const j = toolJson(res);
+    const lista = j?.data?.lista || j?.lista || [];
+    all.push(...lista);
+    if (lista.length < limit) break;
+  }
+  return all;
+}
+
+/* ---------- cotação USD→BRL do dia ---------- */
+async function usdBrl(day) {
+  try {
+    const d = day.replace(/-/g, '');
+    const r = await fetch(`${FX_API}?start_date=${d}&end_date=${d}`);
+    if (r.ok) { const j = await r.json(); const v = Number(j?.[0]?.bid); if (v > 0) return Math.round(v * 10000) / 10000; }
+  } catch {}
+  return null;
+}
+
+/* ---------- data.json via API do GitHub ---------- */
+const ghHeaders = { Authorization: `Bearer ${GH_TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' };
+async function getData() {
+  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=main&t=${Date.now()}`, { headers: ghHeaders });
+  if (r.status === 404) return { data: { v: 3, settings: {}, entries: {}, demo: false }, sha: null };
+  if (!r.ok) throw new Error('GitHub GET data.json: HTTP ' + r.status);
+  const j = await r.json();
+  return { data: JSON.parse(Buffer.from(j.content, 'base64').toString('utf8')), sha: j.sha };
+}
+async function putData(data, sha, message) {
+  const body = { message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: 'main' };
+  if (sha) body.sha = sha;
+  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify(body) });
+  return r.status;
+}
+
+/* ---------- agregação ---------- */
+const FRONT = new Set(['SALE', 'APPROVED', 'PURCHASE', 'COMPLETE', 'PAID']);
+const UPS = new Set(['UPSELL', 'ORDER_BUMP', 'ORDERBUMP', 'BUMP', 'DOWNSELL', 'CROSS_SELL', 'CROSSSELL']);
+const REF = new Set(['REFUND', 'REFUNDED', 'CHARGEBACK', 'CHARGEDBACK', 'REEMBOLSO']);
+function aggregate(sales, days) {
+  const out = {}; days.forEach(d => (out[d] = {}));
+  let used = 0, ignored = 0;
+  for (const s of sales) {
+    const day = localDate(s.created_at); if (!day || !out[day]) continue;
+    const tipo = String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
+    const cur = String(s.currency || 'USD').toUpperCase();
+    const val = Number(s.valor ?? s.total ?? 0) || 0;
+    const isFront = FRONT.has(tipo), isUps = UPS.has(tipo), isRef = REF.has(tipo), isOrder = tipo === 'ORDER_CREATED';
+    if (!isFront && !isUps && !isRef && !isOrder) { ignored++; continue; }
+    const cid = String(s.campaign_id || s.utm_campaign || '').trim();
+    const c = out[day][cid] || (out[day][cid] = { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, ccs: {} });
+    const usd = cur === 'USD' ? val : val; // a Ratoeira envia em USD para esta conta; outras moedas ficam como vieram
+    if (isFront) { c.front++; c.frontUsd += usd; }
+    if (isUps) { c.ups++; c.upsUsd += usd; }
+    if (isRef) { c.ref++; c.refUsd += usd; }
+    if (isOrder) c.orders++;
+    const cc = String(s.pais_sigla || s.pais || '').toUpperCase(); if (cc) c.ccs[cc] = (c.ccs[cc] || 0) + 1;
+    used++;
+  }
+  for (const d of days) for (const c of Object.values(out[d])) {
+    c.cc = Object.entries(c.ccs).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    delete c.ccs;
+    for (const k of ['frontUsd', 'upsUsd', 'refUsd']) c[k] = Math.round(c[k] * 100) / 100;
+  }
+  return { out, used, ignored };
+}
+
+/* ---------- principal ---------- */
+const today = ymd(localNow());
+const days = []; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i)); // nunca o dia de hoje (ainda sem investimento)
+const from = addDays(days[days.length - 1], -1), to = today; // janela folgada; o dia certo vem do horário de cada venda
+console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
+
+const sales = await fetchSales(from, to);
+const { out, used, ignored } = aggregate(sales, days);
+console.log(`Ratoeira: ${sales.length} registros na janela, ${used} usados, ${ignored} de outros tipos ignorados.`);
+const fx = {}; for (const d of days) fx[d] = await usdBrl(d);
+
+for (let attempt = 1; attempt <= 5; attempt++) {
+  const { data, sha } = await getData();
+  data.entries = data.entries || {};
+  let changed = 0;
+  for (const d of days) {
+    const camps = out[d];
+    const e = data.entries[d] || (Object.keys(camps).length ? { rows: [], ads: [], refunds: 0, other: 0, notes: '' } : null);
+    if (!e) continue;
+    const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
+    const next = { p: PLATFORM, camps, fx: fx[d] ?? e.rx?.fx ?? null };
+    if (prev === JSON.stringify({ camps: next.camps, fx: next.fx })) continue;
+    e.rx = { ...next, at: new Date().toISOString(), src: 'ratoeira' };
+    data.entries[d] = e; changed++;
+    const t = Object.values(camps).reduce((a, c) => ({ f: a.f + c.front, u: a.u + c.ups }), { f: 0, u: 0 });
+    console.log(`  ${d}: ${t.f} vendas front, ${t.u} upsells, ${Object.keys(camps).length} campanhas · USD→BRL ${next.fx ?? '—'}`);
+  }
+  if (!changed) { console.log('Nada mudou desde a última atualização.'); process.exit(0); }
+  const st = await putData(data, sha, `Vendas da Ratoeira · ${days.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)).reverse().join(', ')}`);
+  if (st === 200 || st === 201) { console.log(`Pronto: ${changed} dia(s) atualizado(s) no painel.`); process.exit(0); }
+  if (st !== 409 && st !== 422) { console.error('GitHub recusou a gravação: HTTP ' + st); process.exit(1); }
+  console.log('O painel foi salvo ao mesmo tempo; tentando de novo…');
+  await new Promise(r => setTimeout(r, 1500 * attempt));
+}
+console.error('Não consegui gravar depois de 5 tentativas.'); process.exit(1);

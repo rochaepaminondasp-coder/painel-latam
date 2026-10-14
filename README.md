@@ -66,6 +66,25 @@ Taxa de upsell = Vendas upsell ÷ Vendas front
 
 ---
 
+## 🤖 Vendas automáticas (Ratoeira Ads)
+
+O robô `.github/workflows/ratoeira.yml` roda **a cada 3 horas**:
+1. Busca na Ratoeira Ads (via MCP) as vendas dos últimos 3 dias, sem contar hoje.
+2. Separa **front** (SALE), **upsell** (UPSELL) e **reembolsos** por **ID da campanha da MGID**.
+3. Grava em `data.json`. O painel converte de USD para real pela cotação comercial do dia, ou pela cotação fixa definida em Configurações.
+
+Cada venda entra na campanha certa pelo **ID**, que vem da coluna `id` do CSV da MGID, e no país em que a campanha está no painel. As campanhas "Latam", por exemplo, ficam em 🌎 Vários países. Quando um dia tem vendas da Ratoeira, o bloco de vendas da MGID no lançamento fica travado, porque não precisa digitar.
+
+**Configuração (uma vez):** em *Settings → Secrets and variables → Actions → New repository secret*:
+- Name: `RATOEIRA_MCP_URL`
+- Secret: a URL do MCP da Ratoeira, com `?token=…`
+
+**Rodar na hora:** aba *Actions → Vendas da Ratoeira → Run workflow*.
+
+Os logs do robô mostram só contagens, nunca dados de clientes.
+
+---
+
 ## Privacidade
 
 O repositório é **público** (o GitHub Pages gratuito exige isso). Ou seja, os números do `data.json` podem ser vistos por qualquer pessoa que encontre o repositório, não só por quem tem o link. Se um dia quiser fechar, dá para tornar o repositório privado com o plano GitHub Pro ou migrar os dados para outro serviço.

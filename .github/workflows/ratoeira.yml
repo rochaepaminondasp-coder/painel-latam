@@ -1,0 +1,36 @@
+name: Vendas da Ratoeira
+
+# Busca as vendas na Ratoeira Ads e grava no painel (data.json).
+# Roda sozinho a cada 3 horas e pode ser disparado à mão em Actions → "Vendas da Ratoeira" → Run workflow.
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Quantos dias para trás atualizar"
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ratoeira-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Buscar vendas e atualizar o painel
+        env:
+          RATOEIRA_MCP_URL: ${{ secrets.RATOEIRA_MCP_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DAYS: ${{ github.event.inputs.days || '3' }}
+        run: node scripts/ratoeira-sync.mjs
