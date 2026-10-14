@@ -1386,18 +1386,19 @@ function renderPTabs(){
   $('#dropP').textContent=pname(curP);$('#salesP').textContent=pname(curP);
 }
 function rxLocked(){return!!(draft&&draft.rx&&(draft.rx.p||'MG')===curP)}
+function mgLocked(){return!!(draft&&draft.mg&&curP==='MG')}
 function gridHtml(g,list,flashKeys){
-  const fs=activeFields(g),x=g==='t',cols=gridCols(fs.length,true),lock=g==='s'&&rxLocked();
+  const fs=activeFields(g),x=g==='t',cols=gridCols(fs.length,true),lock=(g==='s'&&rxLocked())||(g==='t'&&mgLocked());
   let h=`<div class="crow head" style="grid-template-columns:${cols}"><div>País</div>${fs.map(f=>`<div>${f.l}</div>`).join('')}<div></div></div>`;
   h+=list.map(cc=>{const r=getRow(curP,cc);return`<div class="crow" data-cc="${cc}" data-g="${g}" style="grid-template-columns:${cols}"><div class="cname">${flag(cc)}<span>${esc(cname(cc))}</span></div>
-    ${fs.map(f=>`<div><span class="lbl-m">${f.l}</span><input class="inp${flashKeys&&flashKeys.has(cc+'|'+f.k)?' flash':''}" data-f="${f.k}" inputmode="${f.int?'numeric':'decimal'}" placeholder="${f.k==='rev'&&state.settings.ticket?'auto':'0'}" value="${fmtIn(r[f.k])}"${lock?' disabled title="Vem da Ratoeira automaticamente"':''}></div>`).join('')}
+    ${fs.map(f=>`<div><span class="lbl-m">${f.l}</span><input class="inp${flashKeys&&flashKeys.has(cc+'|'+f.k)?' flash':''}" data-f="${f.k}" inputmode="${f.int?'numeric':'decimal'}" placeholder="${f.k==='rev'&&state.settings.ticket?'auto':'0'}" value="${fmtIn(r[f.k])}"${lock?` disabled title="${g==='t'?'Vem da API da MGID automaticamente':'Vem da Ratoeira automaticamente'}"`:''}></div>`).join('')}
     ${x?`<button type="button" class="x" title="Remover este país do dia">${ICON.x}</button>`:'<span></span>'}<div class="rowmeta">${x?metaT(r):metaS(r)}</div></div>`}).join('');
   return h;
 }
 function renderRows(flashKeys){
   const list=countriesFor(curP);
   if(!list.length){$('#crowsT').innerHTML=`<div class="muted" style="font-size:13.5px;padding:8px 0">Nenhum país nesta plataforma. Adicione abaixo ou importe a planilha.</div>`;$('#crowsS').innerHTML='';}
-  else{$('#crowsT').innerHTML=gridHtml('t',list,flashKeys);$('#crowsS').innerHTML=(rxLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Vendas da ${esc(pname(curP))} vindas da Ratoeira</b> — front, upsell e reembolsos por campanha, atualizados ${draft.rx.at?'em '+esc(fmtAt(draft.rx.at)):'automaticamente'}. Não precisa lançar.</span></div>`:'')+gridHtml('s',list,flashKeys)}
+  else{$('#crowsT').innerHTML=(mgLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Tráfego da MGID vindo da API</b> — investimento, impressões, cliques, page view e initiate checkout por campanha, atualizados ${draft.mg.at?'em '+esc(fmtAt(draft.mg.at)):'automaticamente'}. Não precisa importar.</span></div>`:'')+gridHtml('t',list,flashKeys);$('#crowsS').innerHTML=(rxLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Vendas da ${esc(pname(curP))} vindas da Ratoeira</b> — front, upsell e reembolsos por campanha, atualizados ${draft.rx.at?'em '+esc(fmtAt(draft.rx.at)):'automaticamente'}. Não precisa lançar.</span></div>`:'')+gridHtml('s',list,flashKeys)}
   $$('#crowsT .crow[data-cc],#crowsS .crow[data-cc]').forEach(row=>{const cc=row.dataset.cc,r=getRow(curP,cc);
     $$('input',row).forEach(i=>{const f=i.dataset.f,isMoney=f==='spend'||f==='rev'||f==='upsRev';
       i.oninput=()=>{r[f]=isMoney?parseNum(i.value):Math.round(parseNum(i.value));
@@ -1438,7 +1439,7 @@ function updAdNote(){const el=$('#adNote');if(!el)return;const s=draft.ads.reduc
 function loadForm(d){
   editingDate=state.entries[d]?d:null;
   const e=state.entries[d]?clone(state.entries[d]):{rows:[],ads:[],refunds:0,other:0,notes:''};
-  draft={rx:e.rx||null,rows:e.rows||[],ads:e.ads||[],refunds:e.refunds||0,other:e.other||0,notes:e.notes||'',removed:new Set(),added:[],extraP:[]};
+  draft={rx:e.rx||null,mg:e.mg||null,rows:e.rows||[],ads:e.ads||[],refunds:e.refunds||0,other:e.other||0,notes:e.notes||'',removed:new Set(),added:[],extraP:[]};
   if(editingDate){const present=new Set(draft.rows.map(r=>rowKey(r.p,r.cc)));draftPlatforms().forEach(p=>state.settings.countries.forEach(cc=>{if(!present.has(rowKey(p,cc))&&draft.rows.some(r=>r.p===p))draft.removed.add(rowKey(p,cc))}))}
   curP=draftPlatforms()[0];
   $('#eDate').value=d;$('#dlgSub').textContent=dLong(d)+(d===addDays(todayStr(),-1)?' · ontem':d===todayStr()?' · hoje':'');
@@ -1454,6 +1455,7 @@ function buildEntry(){
   const ads0=draft.ads;
   const ads=draft.ads.filter(a=>(a.name||'').trim()||num(a.spend)||num(a.sales)).map(a=>({name:(a.name||'').trim()||'Sem nome',p:a.p,cc:a.cc||'',cid:a.cid||'',spend:num(a.spend),clicks:num(a.clicks),pv:num(a.pv),ic:num(a.ic),sales:num(a.sales),rev:num(a.rev)||(num(a.sales)&&tk?num(a.sales)*tk:0)}));
   const out={rows,ads,refunds:parseNum($('#eRefunds').value),other:parseNum($('#eOther').value),notes:$('#eNotes').value.trim()};
+  if(draft.mg)out.mg=draft.mg;
   if(draft.rx){out.rx=draft.rx;applyRx(out)}
   return out;
 }

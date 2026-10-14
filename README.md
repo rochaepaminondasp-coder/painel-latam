@@ -66,9 +66,13 @@ Taxa de upsell = Vendas upsell ÷ Vendas front
 
 ---
 
-## 🤖 Vendas automáticas (Ratoeira Ads)
+## 🤖 Painel automático (MGID + Ratoeira Ads)
 
 O robô `.github/workflows/ratoeira.yml` roda **a cada 3 horas**:
+
+**MGID (tráfego):** busca na API da MGID (cliente 996870) o investimento, as impressões, os cliques e as etapas de conversão de cada campanha. A etapa com mais conversões vira *Page view* e a outra vira *Initiate checkout*. Segredo necessário: `MGID_TOKEN`.
+
+**Ratoeira (vendas):**
 1. Busca na Ratoeira Ads (via MCP) as vendas dos últimos 3 dias, sem contar hoje.
 2. Separa **front** (SALE), **upsell** (UPSELL) e **reembolsos** por **ID da campanha da MGID**.
 3. Grava em `data.json`. O painel converte de USD para real pela cotação comercial do dia, ou pela cotação fixa definida em Configurações.
