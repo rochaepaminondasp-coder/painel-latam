@@ -471,7 +471,7 @@ body:not(.viewer) .view-only{display:none!important}
     <div><h2 id="greet">Bom dia</h2><p id="greetSub"></p></div>
     <div class="filters">
       <div class="seg" id="rangeSeg">
-        <button data-r="today">Hoje</button><button data-r="yesterday">Ontem</button><button data-r="7d">7d</button><button data-r="14d">14d</button><button data-r="30d" class="on">30d</button><button data-r="month">Mês</button><button data-r="90d">90d</button><button data-r="all">Tudo</button><button data-r="custom">Personalizado</button>
+        <button data-r="today" class="on">Hoje</button><button data-r="yesterday">Ontem</button><button data-r="7d">7d</button><button data-r="14d">14d</button><button data-r="30d">30d</button><button data-r="month">Mês</button><button data-r="90d">90d</button><button data-r="all">Tudo</button><button data-r="custom">Personalizado</button>
       </div>
       <div class="custom-range" id="customRange"><input type="date" id="fFrom"><span class="muted">→</span><input type="date" id="fTo"></div>
       <select class="select" id="platformFilter" aria-label="Filtrar por plataforma"></select>
@@ -859,7 +859,7 @@ function load(){return migrate(readCache()||{})}
 function writeCache(){if(state.demo)return;try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch(e){}}
 function save(kind,d){if(state.demo)return;writeCache();if(kind){markDirty(kind,d);if(isEditor())schedulePush()}}
 let state=load();
-const ui={range:'30d',country:'ALL',platform:'ALL',tab:'overview',from:null,to:null,open:null,ocrMode:'ads',matrix:'roas'};
+const ui={range:'today',country:'ALL',platform:'ALL',tab:'overview',from:null,to:null,open:null,ocrMode:'ads',matrix:'roas'};
 const charts={};
 const fee=()=>num(state.settings.feePct)/100;
 const fOn=k=>{const f=FIELDS.find(x=>x.k===k);return f.always||!!state.settings.fields[f.opt||f.k]};
@@ -1049,15 +1049,17 @@ function renderKPIs(dates){
   const f=F(),t=agg(dates,f),p=agg(prevDates(dates),f),r=ratios(t),pr=ratios(p),c=tc();
   const series=k=>dates.map(d=>{const e=state.entries[d];if(!e)return null;const x=tot(e,f);if(k==='roas')return x.spend?x.rev/x.spend:null;return x[k]});
   const P=v=>p.days>0?v:null;
+  // em 'Hoje' o dia ainda não acabou: valores absolutos mostram o total de ontem em vez de % 
+  const part=ui.range==='today',yd=(v,fmt)=>`<span class="delta" title="Hoje é parcial; ontem é o dia inteiro">ontem ${p.days?fmt(v):'—'}</span>`;
   const cards=[
-    {k:'Lucro líquido',v:money(t.profit),cls:t.profit>=0?'pos':'neg',ico:ICON.profit,col:t.profit>=0?c.profit:c.loss,d:deltaHtml(t.profit,P(p.profit)),sp:series('profit'),hero:true},
-    {k:'Faturamento',v:money(t.rev),ico:ICON.cash,col:c.rev,d:deltaHtml(t.rev,P(p.rev)),sp:series('rev')},
-    {k:'Investimento em tráfego',v:money(t.spend),ico:ICON.ads,col:c.spend,d:deltaHtml(t.spend,P(p.spend),'neutral'),sp:series('spend')},
+    {k:'Lucro líquido',v:money(t.profit),cls:t.profit>=0?'pos':'neg',ico:ICON.profit,col:t.profit>=0?c.profit:c.loss,d:part?yd(p.profit,money):deltaHtml(t.profit,P(p.profit)),sp:series('profit'),hero:true},
+    {k:'Faturamento',v:money(t.rev),ico:ICON.cash,col:c.rev,d:part?yd(p.rev,money):deltaHtml(t.rev,P(p.rev)),sp:series('rev')},
+    {k:'Investimento em tráfego',v:money(t.spend),ico:ICON.ads,col:c.spend,d:part?yd(p.spend,money):deltaHtml(t.spend,P(p.spend),'neutral'),sp:series('spend')},
     {k:'ROAS',v:xf(r.roas),cls:r.roas==null?'':r.roas>=1?'pos':'neg',ico:ICON.roas,col:c.profit,d:deltaHtml(r.roas,P(pr.roas)),sp:series('roas')},
-    {k:'Vendas front',v:intf(t.sales),ico:ICON.cart,col:c.rev,d:deltaHtml(t.sales,P(p.sales)),sp:series('sales')},
+    {k:'Vendas front',v:intf(t.sales),ico:ICON.cart,col:c.rev,d:part?yd(p.sales,intf):deltaHtml(t.sales,P(p.sales)),sp:series('sales')},
     {k:'CPA (custo por venda)',v:r.cpa==null?'—':money(r.cpa),ico:ICON.user,col:c.spend,d:deltaHtml(r.cpa,P(pr.cpa),'down')},
     {k:'Ticket médio (c/ upsell)',v:r.ticket==null?'—':money(r.ticket),ico:ICON.tag,col:c.rev,d:deltaHtml(r.ticket,P(pr.ticket))},
-    {k:'Margem líquida',v:pctf(r.margin),cls:r.margin==null?'':r.margin>=0?'pos':'neg',ico:ICON.pct,col:c.profit,d:`<span class="delta">${t.days} ${t.days===1?'dia':'dias'} lançados</span>`}
+    {k:'Margem líquida',v:pctf(r.margin),cls:r.margin==null?'':r.margin>=0?'pos':'neg',ico:ICON.pct,col:c.profit,d:part?`<span class="delta">hoje até agora</span>`:`<span class="delta">${t.days} ${t.days===1?'dia':'dias'} lançados</span>`}
   ];
   $('#kpis').innerHTML=cards.map(k=>`<div class="card kpi${k.hero?' hero-kpi'+(t.profit<0?' loss':''):''}">
     <div class="k-top"><span class="k-dot" style="background:${hexA(k.col,.15)};color:${k.col}">${k.ico}</span>${k.k}</div>
@@ -1904,7 +1906,7 @@ async function dispatchSync(manual){
   try{localStorage.setItem(LS_KICK,String(Date.now()))}catch(e){}
   kick.busy=true;kick.msg='Pedindo dados novos à MGID e à Ratoeira…';kickUi();
   let ok=false;
-  try{const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/actions/workflows/ratoeira.yml/dispatches`,{method:'POST',headers:ghHeaders(true),body:JSON.stringify({ref:'main',inputs:{days:'1'}})});
+  try{const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/actions/workflows/ratoeira.yml/dispatches`,{method:'POST',headers:ghHeaders(true),body:JSON.stringify({ref:'main',inputs:{days:'1',mode:'once'}})});
     ok=r.status===204;
     if(!ok){kick.busy=false;kick.msg=r.status===403||r.status===404?'Para atualizar pelo painel, o token do GitHub precisa da permissão Actions = Read and write (Configurações).':'Não consegui acionar o robô agora (HTTP '+r.status+').';if(manual)toast(kick.msg,'err');kickUi();return}
   }catch(e){kick.busy=false;kick.msg='Sem conexão com o GitHub.';kickUi();return}

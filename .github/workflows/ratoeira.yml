@@ -1,15 +1,19 @@
 name: Atualizar painel (MGID + Ratoeira)
 
-# Quase em tempo real: a cada 5 minutos busca o tráfego (API da MGID) e as vendas (Ratoeira Ads)
-# de HOJE e de ONTEM e grava no painel (data.json no galho "dados").
-# Uma vez por dia (06:17 de Brasília) revisa os últimos 4 dias, para pegar reembolsos atrasados.
-# Para rodar na hora: Actions → "Atualizar painel (MGID + Ratoeira)" → Run workflow.
+# Mantém o painel quase em tempo real:
+#  - modo "loop" (padrão): atualiza hoje e ontem a cada ~4 minutos por ~50 minutos e,
+#    no fim, chama a próxima rodada sozinho. Só existe uma rodada "loop" por vez.
+#  - modo "once": uma atualização só (é o que o painel usa no botão de atualizar).
+# O agendamento abaixo é só uma reserva para religar a corrente se ela parar.
 on:
   schedule:
-    - cron: "*/5 * * * *"
-    - cron: "17 9 * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "loop = mantém atualizando sozinho; once = uma vez só"
+        required: false
+        default: "loop"
       days:
         description: "Quantos dias antes de hoje atualizar (hoje sempre entra)"
         required: false
@@ -17,38 +21,44 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
-  group: ratoeira-sync
+  group: painel-${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'once') && 'once' || 'loop' }}
   cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 58
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Tráfego da MGID
-        id: mgid
-        continue-on-error: true
+      - name: Atualizar MGID + Ratoeira
         env:
           MGID_TOKEN: ${{ secrets.MGID_TOKEN }}
           MGID_CLIENT_ID: "996870"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DAYS: ${{ github.event.schedule == '17 9 * * *' && '4' || github.event.inputs.days || '1' }}
-        run: node scripts/mgid-sync.mjs
-      - name: Vendas da Ratoeira
-        if: always()
-        env:
           RATOEIRA_MCP_URL: ${{ secrets.RATOEIRA_MCP_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DAYS: ${{ github.event.schedule == '17 9 * * *' && '4' || github.event.inputs.days || '1' }}
-        run: node scripts/ratoeira-sync.mjs
-      - name: Avisar se a MGID falhou
-        if: steps.mgid.outcome == 'failure'
+          MODE: ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'once') && 'once' || 'loop' }}
+          DAYS_IN: ${{ inputs.days || '1' }}
         run: |
-          echo "::error::A parte da MGID falhou (veja o passo 'Tráfego da MGID'). As vendas da Ratoeira foram atualizadas normalmente."
-          exit 1
+          rounds=1; [ "$MODE" = "loop" ] && rounds=12
+          fails=0
+          for i in $(seq 1 $rounds); do
+            # uma vez por dia (06h de Brasília) revisa os últimos 4 dias, para pegar reembolsos atrasados
+            D=$DAYS_IN; [ "$(date -u +%H)" = "09" ] && [ "$i" = "1" ] && D=4
+            echo "::group::Rodada $i/$rounds · $(TZ=America/Fortaleza date +%H:%M) · dias=$D"
+            DAYS=$D node scripts/mgid-sync.mjs || { echo "::warning::MGID falhou na rodada $i"; fails=$((fails+1)); }
+            DAYS=$D node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
+            echo "::endgroup::"
+            [ "$i" -lt "$rounds" ] && sleep 230
+          done
+          echo "Falhas: $fails"
+      - name: Chamar a próxima rodada
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.mode != 'once') || github.event_name == 'schedule')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ratoeira.yml --ref main -f mode=loop -f days=1
