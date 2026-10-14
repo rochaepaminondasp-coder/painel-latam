@@ -60,21 +60,36 @@ async function mcp(method, params, notify = false) {
 function toolJson(result) {
   const text = (result?.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
   if (result?.isError) throw new Error('A Ratoeira recusou a consulta: ' + text.slice(0, 200));
+  if (/conte[uú]do truncado|truncated/i.test(text)) throw new Error('resposta cortada');
   const a = text.indexOf('{'), b = text.lastIndexOf('}');
   if (a < 0) throw new Error('Resposta da Ratoeira sem JSON');
   return JSON.parse(text.slice(a, b + 1));
 }
+// O MCP da Ratoeira corta cada resposta em ~25 mil caracteres: pedimos páginas pequenas,
+// só dos tipos que interessam, e diminuímos a página se ainda assim vier cortada.
+const TIPOS = ['SALE', 'UPSELL', 'REFUND', 'CHARGEBACK'];
 async function fetchSales(from, to) {
   await mcp('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'painel-latam', version: '1.0' } });
   await mcp('notifications/initialized', {}, true);
-  const all = [], limit = 200;
-  for (let page = 1; page <= 50; page++) {
+  const all = [], seen = new Set();
+  let limit = 12, page = 1, total = null, calls = 0;
+  while (calls++ < 400) {
     const res = await mcp('tools/call', { name: 'get_postback_vendas_by_cliente', arguments: {
-      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:59`, timezone: 'America/Sao_Paulo', format: 'json', page, limit } });
-    const j = toolJson(res);
+      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:59`, timezone: 'America/Sao_Paulo', tipo: TIPOS, format: 'json', page, limit } });
+    let j;
+    try { j = toolJson(res); }
+    catch (err) {
+      if (limit > 2) { // resposta cortada: recomeça com páginas menores
+        limit = Math.max(2, Math.floor(limit / 2)); page = 1; all.length = 0; seen.clear();
+        console.log(`Resposta grande demais; tentando com ${limit} por página…`); continue;
+      }
+      throw err;
+    }
     const lista = j?.data?.lista || j?.lista || [];
-    all.push(...lista);
-    if (lista.length < limit) break;
+    if (total == null) total = Number(j?.data?.total ?? j?.total ?? NaN);
+    for (const s of lista) { const k = String(s.id ?? JSON.stringify(s)); if (!seen.has(k)) { seen.add(k); all.push(s); } }
+    if (lista.length < limit || (Number.isFinite(total) && all.length >= total)) break;
+    page++;
   }
   return all;
 }
