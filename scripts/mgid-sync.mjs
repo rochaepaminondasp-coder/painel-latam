@@ -13,7 +13,7 @@ const CLIENT = process.env.MGID_CLIENT_ID || '996870';
 const GH_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = process.env.GITHUB_REPOSITORY;
 const DAYS = Math.max(1, Math.min(10, Number(process.env.DAYS || 3)));
-const API = (process.env.MGID_API || 'https://api.mgid.com/v1').replace(/\/$/, '');
+const API = (process.env.MGID_API || 'https://api.mgid.com/v2').replace(/\/$/, '');
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const P = 'MG';
 
@@ -27,65 +27,27 @@ const today = ymd(new Date(Date.now() - 3 * 3600e3)); // horário de Brasília
 const days = []; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i));
 const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
-/* ---------- API da MGID ---------- */
-// A doc pede "Authorization: Bearer {token}"; testamos também o token puro no cabeçalho e ?token=,
-// e guardamos o formato que funcionar. Em caso de recusa, mostramos a mensagem da MGID (o GitHub mascara o token).
-const AUTH = [
-  { name: 'Bearer', h: t => ({ Authorization: `Bearer ${t}` }) },
-  { name: 'cabeçalho puro', h: t => ({ Authorization: t }) },
-  { name: '?token=', q: true },
-];
-let authIdx = null;
-async function mgid(path, params = {}) {
-  const tried = [];
-  for (const i of authIdx == null ? AUTH.keys() : [authIdx]) {
-    const m = AUTH[i], qs = new URLSearchParams(params); if (m.q) qs.set('token', TOKEN);
-    const r = await fetch(`${API}${path}?${qs}`, { headers: { Accept: 'application/json', ...(m.h ? m.h(TOKEN) : {}) } });
-    if (r.ok) { authIdx = i; return r.json(); }
-    let msg = ''; try { msg = (await r.text()).replace(/\s+/g, ' ').slice(0, 220); } catch {}
-    tried.push(`${m.name} → HTTP ${r.status}${msg ? ' ' + msg : ''}`);
-    if (r.status !== 401 && r.status !== 403) break;
+/* ---------- API v2 da MGID ---------- */
+// Relatório personalizado: GET /v2/ads/account/{clientId}/statistics/reports
+// metrics/dimensions separados por vírgula; filtros em colchetes (deepObject); token Bearer.
+const METRICS = ['impressions', 'clicks', 'spent', 'conversionsInterest', 'conversionsDecision', 'conversionsBuy'];
+const money = v => (v && typeof v === 'object') ? num(v.amount) : num(v);
+async function report(from, to) {
+  const all = [], LIM = 500; let currency = null;
+  for (let off = 0; off < 20000; off += LIM) {
+    const qs = [
+      `metrics=${METRICS.join(',')}`, 'dimensions=day,campaignId,campaignName',
+      `filters[dateRange][dateFrom]=${encodeURIComponent(from + 'T00:00:00-03:00')}`,
+      `filters[dateRange][dateTo]=${encodeURIComponent(to + 'T23:59:59-03:00')}`,
+      `limit=${LIM}`, `offset=${off}`].join('&');
+    const r = await fetch(`${API}/ads/account/${CLIENT}/statistics/reports?${qs}`, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' } });
+    if (!r.ok) { let t = ''; try { t = (await r.text()).replace(/\s+/g, ' ').slice(0, 400); } catch {} throw new Error(`MGID recusou o relatório: HTTP ${r.status} ${t}`); }
+    const j = await r.json();
+    const data = Array.isArray(j?.data) ? j.data : [];
+    for (const row of data) { if (!currency && row?.spent?.currency) currency = row.spent.currency; all.push(row); }
+    if (data.length < LIM) break;
   }
-  throw new Error(`MGID ${path} recusou: ${tried.join(' | ')}`);
-}
-const isStat = o => o && typeof o === 'object' && !Array.isArray(o) && ['spent', 'clicks', 'imps'].some(k => k in o);
-// Encontra {campaignId: {spent, clicks, ...}} em qualquer nível da resposta.
-function findStats(obj, depth = 0) {
-  if (!obj || typeof obj !== 'object' || depth > 5) return null;
-  if (Array.isArray(obj)) {
-    const rows = obj.filter(x => isStat(x) && (x.id ?? x.campaignId ?? x.campaign_id) != null);
-    if (rows.length) return Object.fromEntries(rows.map(x => [String(x.id ?? x.campaignId ?? x.campaign_id), x]));
-    return null;
-  }
-  const entries = Object.entries(obj);
-  const statKids = entries.filter(([k, v]) => /^\d+$/.test(k) && isStat(v));
-  if (statKids.length) return Object.fromEntries(statKids);
-  // às vezes vem {campaignId: {"2026-10-13": {...}}}
-  const dated = entries.filter(([k, v]) => /^\d+$/.test(k) && v && typeof v === 'object' && Object.values(v).some(isStat));
-  if (dated.length) return Object.fromEntries(dated.map(([k, v]) => {
-    const acc = {}; for (const s of Object.values(v)) if (isStat(s)) for (const [kk, vv] of Object.entries(s)) if (typeof vv !== 'object') acc[kk] = (acc[kk] || 0) + num(vv);
-    return [k, acc];
-  }));
-  for (const [, v] of entries) { const f = findStats(v, depth + 1); if (f) return f; }
-  return null;
-}
-function describe(obj, depth = 0) { // só nomes de campos, para diagnóstico
-  if (!obj || typeof obj !== 'object' || depth > 3) return typeof obj;
-  if (Array.isArray(obj)) return `[${obj.length}] ${describe(obj[0], depth + 1)}`;
-  const ks = Object.keys(obj); return `{${ks.slice(0, 12).map(k => (/^\d+$/.test(k) ? '<id>' : k) + ':' + describe(obj[k], depth + 1)).join(', ')}${ks.length > 12 ? ', …' : ''}}`;
-}
-async function campaignNames() {
-  try {
-    const j = await mgid(`/goodhits/clients/${CLIENT}/campaigns`, { limit: 700, start: 0 });
-    const out = {};
-    (function walk(o, d) {
-      if (!o || typeof o !== 'object' || d > 5) return;
-      if (Array.isArray(o)) return o.forEach(x => walk(x, d + 1));
-      const id = o.id ?? o.campaignId; if (id != null && typeof o.name === 'string') out[String(id)] = o.name;
-      for (const [k, v] of Object.entries(o)) { if (/^\d+$/.test(k) && v && typeof v.name === 'string') out[k] = v.name; else if (typeof v === 'object') walk(v, d + 1); }
-    })(j, 0);
-    return out;
-  } catch (e) { console.log('Não consegui listar os nomes das campanhas (' + e.message + '); uso os já conhecidos.'); return {}; }
+  return { rows: all, currency };
 }
 
 /* ---------- país da campanha pelo nome (para campanhas novas) ---------- */
@@ -112,13 +74,16 @@ async function putData(data, sha, message) {
 
 /* ---------- principal ---------- */
 console.log(`MGID: atualizando ${days.slice().reverse().join(', ')} …`);
-const names = await campaignNames();
-const perDay = {};
-for (const d of days) {
-  const j = await mgid(`/goodhits/clients/${CLIENT}/campaigns-stat`, { dateInterval: 'interval', startDate: d, endDate: d });
-  const st = findStats(j);
-  if (!st) { console.error(`Formato inesperado da MGID em ${d}. Estrutura recebida: ${describe(j)}`); process.exit(1); }
-  perDay[d] = st;
+const { rows: rep, currency } = await report(days[days.length - 1], days[0]);
+console.log(`MGID: ${rep.length} linhas (campanha × dia) · moeda do investimento: ${currency || '—'}`);
+const names = {}, perDay = Object.fromEntries(days.map(d => [d, {}]));
+for (const row of rep) {
+  const d = String(row.day || '').slice(0, 10), cid = String(row.campaignId ?? '');
+  if (!perDay[d] || !cid) continue;
+  if (row.campaignName) names[cid] = row.campaignName;
+  const o = perDay[d][cid] || (perDay[d][cid] = { spent: 0, imps: 0, clicks: 0, interest: 0, decision: 0 });
+  o.spent += money(row.spent); o.imps += num(row.impressions); o.clicks += num(row.clicks);
+  o.interest += num(row.conversionsInterest); o.decision += num(row.conversionsDecision);
 }
 
 for (let attempt = 1; attempt <= 5; attempt++) {
