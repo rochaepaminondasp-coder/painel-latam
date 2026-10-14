@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Painel LATAM</title>
-<meta name="description" content="Painel diário de native ads (Taboola, MGID) — funil, faturamento, investimento e lucro por plataforma, país e anúncio.">
+<meta name="description" content="Painel diário de native ads (Taboola, MGID) — funil, faturamento, investimento e lucro por plataforma, país e campanha.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23C8F25A'/%3E%3Cpath d='M8 22v-5M14 22v-9M20 22v-7M26 22V9' stroke='%230B0E14' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -234,6 +234,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;min-width:900px}
 .tbl tr.main-row{cursor:pointer}
 .tbl tr.main-row:hover td{background:var(--card2)}
 .tbl tr.detail td{background:var(--bg2);padding:10px 14px;white-space:normal}
+.tbl.compact{font-size:13px;min-width:1080px}.tbl.compact td,.tbl.compact th{padding:10px 7px}.tbl.compact th{font-size:11px}
 .tbl tr.top1 td{background:color-mix(in srgb,var(--profit) 7%,transparent)}
 .dchips{display:flex;flex-wrap:wrap;gap:8px}
 .dchip{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px}
@@ -476,7 +477,7 @@ body:not(.viewer) .view-only{display:none!important}
   <nav class="tabs" id="tabs">
     <button data-t="overview" class="on"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Visão geral</button>
     <button data-t="platforms"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Plataformas</button>
-    <button data-t="ads"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Anúncios</button>
+    <button data-t="ads"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Campanhas</button>
     <button data-t="countries"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Países</button>
     <button data-t="history"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Histórico</button>
     <button data-t="settings"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Configurações</button>
@@ -602,7 +603,7 @@ body:not(.viewer) .view-only{display:none!important}
   <section class="view" id="v-history">
     <div class="card">
       <div class="card-h">
-        <div><h3>Histórico de lançamentos</h3><div class="sub">Clique em uma linha para ver plataformas, países e anúncios</div></div>
+        <div><h3>Histórico de lançamentos</h3><div class="sub">Clique em uma linha para ver plataformas, países e campanhas</div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" id="btnCsv">Exportar CSV</button><button class="btn sm primary edit-only" id="btnNew2">+ Lançar dia</button></div>
       </div>
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Data</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">CPC</th><th class="r">Checkouts</th><th class="r">Vendas front</th><th class="r">Faturamento</th><th class="r">Lucro</th><th class="r">ROAS</th><th>Status</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div>
@@ -696,8 +697,8 @@ body:not(.viewer) .view-only{display:none!important}
       </div>
 
       <div>
-        <div class="blk-t"><span class="n">3</span>Anúncios / campanhas do dia <span class="muted">— opcional, para o ranking</span>
-          <span style="margin-left:auto;display:flex;gap:6px"><button type="button" class="btn sm ghost" id="btnCopyAds">Repetir anúncios do último dia</button><button type="button" class="btn sm" id="btnAddAd">+ Anúncio</button></span></div>
+        <div class="blk-t"><span class="n">3</span>Campanhas do dia <span class="muted">— vendas em branco = o painel estima pelas vendas do país</span>
+          <span style="margin-left:auto;display:flex;gap:6px"><button type="button" class="btn sm ghost" id="btnCopyAds">Repetir campanhas do último dia</button><button type="button" class="btn sm" id="btnAddAd">+ Campanha</button></span></div>
         <div id="adRows"></div>
         <datalist id="adNames"></datalist>
       </div>
@@ -886,14 +887,32 @@ function groupBy(dates,keyFn,f){
   arr.forEach(o=>{o.profit=o.rev-o.spend-o.rev*fee();Object.assign(o,ratios(o));o.share=tr?o.rev/tr:0;o.salesShare=ts?o.sales/ts:0;o.spendShare=tsp?o.spend/tsp:0});
   return arr.sort((a,b)=>b.profit-a.profit);
 }
+/* Vendas por campanha: o que foi lançado na campanha; se não houver, as vendas e o faturamento
+   do país (mesma plataforma) são divididos entre as campanhas dele pelos initiate checkouts
+   (ou page views / cliques / investimento, o que todas tiverem). */
+function allocAds(e){
+  const ads=e.ads||[],out=ads.map(a=>({sales:num(a.sales),rev:num(a.rev),est:false})),groups={};
+  ads.forEach((a,i)=>{const k=a.p+'|'+(a.cc||'XX');(groups[k]=groups[k]||[]).push(i)});
+  for(const[k,idx]of Object.entries(groups)){
+    const[p,cc]=k.split('|');const row=(e.rows||[]).find(r=>r.p===p&&r.cc===cc);if(!row)continue;
+    const manual=idx.filter(i=>num(ads[i].sales)||num(ads[i].rev)),auto=idx.filter(i=>!manual.includes(i));if(!auto.length)continue;
+    const S=Math.max(0,num(row.sales)-manual.reduce((s,i)=>s+num(ads[i].sales),0));
+    const Rv=Math.max(0,num(row.rev)+num(row.upsRev)-manual.reduce((s,i)=>s+num(ads[i].rev),0));
+    if(!S&&!Rv)continue;
+    const key=['ic','pv','clicks','spend'].find(f=>auto.every(i=>num(ads[i][f])>0))||'spend';
+    const W=auto.reduce((s,i)=>s+num(ads[i][key]),0);
+    auto.forEach(i=>{const w=W?num(ads[i][key])/W:1/auto.length;out[i]={sales:S*w,rev:Rv*w,est:true,by:key}});
+  }
+  return out;
+}
 function adStats(dates){
   const m={};
-  for(const d of dates){const e=state.entries[d];if(!e)continue;for(const a of e.ads||[]){
-    if(ui.platform!=='ALL'&&a.p!==ui.platform)continue;if(ui.country!=='ALL'&&a.cc&&a.cc!==ui.country)continue;
-    const k=a.p+'|'+norm(a.name||'').trim();const o=m[k]||(m[k]={name:a.name||'Sem nome',p:a.p,ccs:new Set(),days:new Set(),spend:0,clicks:0,sales:0,rev:0});
-    o.spend+=num(a.spend);o.clicks+=num(a.clicks);o.sales+=num(a.sales);o.rev+=num(a.rev);o.days.add(d);if(a.cc)o.ccs.add(a.cc)}}
+  for(const d of dates){const e=state.entries[d];if(!e)continue;const al=allocAds(e);(e.ads||[]).forEach((a,i)=>{
+    if(ui.platform!=='ALL'&&a.p!==ui.platform)return;if(ui.country!=='ALL'&&a.cc&&a.cc!==ui.country)return;
+    const k=a.p+'|'+norm(a.name||'').trim();const o=m[k]||(m[k]={name:a.name||'Sem nome',p:a.p,ccs:new Set(),days:new Set(),spend:0,clicks:0,ic:0,sales:0,rev:0,est:false});
+    o.spend+=num(a.spend);o.clicks+=num(a.clicks);o.ic+=num(a.ic);o.sales+=al[i].sales;o.rev+=al[i].rev;if(al[i].est)o.est=true;o.days.add(d);if(a.cc)o.ccs.add(a.cc)})}
   const arr=Object.values(m).filter(o=>o.spend||o.sales||o.rev);
-  arr.forEach(o=>{o.profit=o.rev-o.spend-o.rev*fee();o.roas=o.spend?o.rev/o.spend:null;o.cpa=o.sales?o.spend/o.sales:null;o.cpc=o.clicks?o.spend/o.clicks:null;o.epc=o.clicks?o.rev/o.clicks:null;o.nd=o.days.size});
+  arr.forEach(o=>{o.profit=o.rev-o.spend-o.rev*fee();o.roas=o.spend?o.rev/o.spend:null;o.cpa=o.sales?o.spend/o.sales:null;o.cpc=o.clicks?o.spend/o.clicks:null;o.epc=o.clicks?o.rev/o.clicks:null;o.cpic=o.ic?o.spend/o.ic:null;o.nd=o.days.size});
   return arr.sort((a,b)=>b.profit-a.profit);
 }
 const sortedKeys=()=>Object.keys(state.entries).sort();
@@ -1074,7 +1093,7 @@ function renderInsights(dates){
   if(ui.platform==='ALL'){const bp=groupBy(dates,r=>r.p,{cc:ui.country})[0];if(bp&&allPlatformsUsed().length>1)h+=row(ICON.ads,pcolor(bp.key),`Melhor plataforma: ${esc(pname(bp.key))}`,`ROAS ${xf(bp.roas)} · EPC ${moneyP(bp.epc)}`,money(bp.profit))}
   if(ui.country==='ALL'){const bc=groupBy(dates,r=>r.cc,{p:ui.platform})[0];if(bc)h+=row(ICON.globe,colorFor(bc.key),`Melhor país: ${esc(cname(bc.key))}`,`ROAS ${xf(bc.roas)} · ${intf(bc.sales)} vendas`,money(bc.profit))}
   const ba=adStats(dates).find(a=>a.profit>0);
-  if(ba)h+=row(ICON.trophy,c.profit,`Melhor anúncio`,`${esc(ba.name)} · ${esc(pname(ba.p))}`,money(ba.profit));
+  if(ba)h+=row(ICON.trophy,c.profit,`Melhor campanha`,`${esc(ba.name)} · ${esc(pname(ba.p))}`,money(ba.profit));
   $('#insights').innerHTML=h;
   const goal=num(state.settings.goal);
   if(goal>0&&ui.platform==='ALL'&&ui.country==='ALL'){const target=goal*t.days,hit=days.filter(x=>x.profit>=goal).length,pc=Math.max(0,Math.min(1,target?t.profit/target:0));
@@ -1221,7 +1240,7 @@ function renderMatrix(dates){
 const ADS_ILLO=`<svg viewBox="0 0 160 110" fill="none"><rect x="10" y="14" width="96" height="70" rx="12" fill="var(--card2)" stroke="var(--line2)" stroke-width="2"/><rect x="20" y="24" width="76" height="30" rx="6" fill="var(--rev)" opacity=".5"/><rect x="20" y="60" width="56" height="7" rx="3.5" fill="var(--line2)"/><rect x="20" y="71" width="38" height="7" rx="3.5" fill="var(--line2)"/><g transform="translate(118 62)"><circle r="26" fill="var(--accent)"/><path d="M-9 -10h18v6a9 9 0 0 1-18 0zM-4 8h8M0 4v4" stroke="var(--accent-ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
 function renderAds(dates){
   const ads=adStats(dates);
-  if(!ads.length){$('#adsBody').innerHTML=`<div class="card empty-sm">${ADS_ILLO}<b>Nenhum anúncio ou campanha no período</b>Ao importar a planilha da MGID, as campanhas entram aqui automaticamente. Você também pode lançar anúncios à mão no bloco <b style="display:inline">Anúncios / campanhas do dia</b>.<div style="margin-top:16px" class="edit-only"><button class="btn primary" id="adsNew">Lançar anúncios</button></div></div>`;$('#adsNew').onclick=()=>openEntry(undefined,true);return}
+  if(!ads.length){$('#adsBody').innerHTML=`<div class="card empty-sm">${ADS_ILLO}<b>Nenhuma campanha no período</b>Ao importar a planilha da MGID, as campanhas entram aqui automaticamente. Você também pode lançar campanhas à mão no bloco <b style="display:inline">Campanhas do dia</b>.<div style="margin-top:16px" class="edit-only"><button class="btn primary" id="adsNew">Lançar campanhas</button></div></div>`;$('#adsNew').onclick=()=>openEntry(undefined,true);return}
   const best=ads.find(a=>a.profit>0)||ads[0];
   const totSpend=ads.reduce((s,a)=>s+a.spend,0),totSales=ads.reduce((s,a)=>s+a.sales,0),avgCpa=totSales?totSpend/totSales:null;
   const bleed=ads.filter(a=>a.sales===0&&avgCpa&&a.spend>=avgCpa*1.5).sort((a,b)=>b.spend-a.spend);
@@ -1229,20 +1248,20 @@ function renderAds(dates){
   $('#adsBody').innerHTML=`
     <div class="grid g-21">
       <div class="card best"><div class="trophy">🏆</div>
-        <div style="min-width:0"><div class="muted" style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Melhor anúncio / campanha do período</div>
+        <div style="min-width:0"><div class="muted" style="font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Melhor campanha do período</div>
           <h3 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(best.name)}</h3>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${pbadge(best.p)}${[...best.ccs].map(cc=>flag(cc)).join('')}<span class="muted" style="font-size:12.5px">${best.nd} ${best.nd===1?'dia':'dias'} rodando</span></div>
-          <div class="bstats"><div><small>Lucro</small><b class="${best.profit>=0?'pos':'neg'}">${money(best.profit)}</b></div><div><small>ROAS</small><b>${xf(best.roas)}</b></div><div><small>Vendas</small><b>${intf(best.sales)}</b></div><div><small>CPA</small><b>${best.cpa==null?'—':money(best.cpa)}</b></div><div><small>EPC</small><b>${moneyP(best.epc)}</b></div><div><small>CPC</small><b>${moneyP(best.cpc)}</b></div></div>
+          <div class="bstats"><div><small>Lucro</small><b class="${best.profit>=0?'pos':'neg'}">${money(best.profit)}</b></div><div><small>ROAS</small><b>${xf(best.roas)}</b></div><div><small>Vendas</small><b>${best.est?'≈':''}${best.sales.toLocaleString('pt-BR',{maximumFractionDigits:1})}</b></div><div><small>CPA</small><b>${best.cpa==null?'—':money(best.cpa)}</b></div><div><small>EPC</small><b>${moneyP(best.epc)}</b></div><div><small>CPC</small><b>${moneyP(best.cpc)}</b></div></div>
         </div><div></div></div>
-      <div class="card"><div class="card-h"><div><h3>Atenção</h3><div class="sub">Anúncios queimando verba${avgCpa?` · CPA médio ${money(avgCpa)}`:''}</div></div></div>
+      <div class="card"><div class="card-h"><div><h3>Atenção</h3><div class="sub">Campanhas queimando verba${avgCpa?` · CPA médio ${money(avgCpa)}`:''}</div></div></div>
         <div class="alert-list">${bleed.slice(0,3).map(a=>`<div class="alert"><span class="neg">${ICON.warn}</span><span><b>${esc(a.name)}</b><br><span class="muted">${esc(pname(a.p))} · gastou sem vender</span></span><span class="num neg">${money(a.spend)}</span></div>`).join('')}
         ${losing.slice(0,Math.max(0,3-bleed.length)).map(a=>`<div class="alert"><span class="neg">${ICON.down}</span><span><b>${esc(a.name)}</b><br><span class="muted">${esc(pname(a.p))} · ROAS ${xf(a.roas)}</span></span><span class="num neg">${money(a.profit)}</span></div>`).join('')}
-        ${!bleed.length&&!losing.length?`<div class="muted" style="font-size:13.5px">Nenhum anúncio no vermelho neste período. 👏</div>`:''}</div></div>
+        ${!bleed.length&&!losing.length?`<div class="muted" style="font-size:13.5px">Nenhuma campanha no vermelho neste período. 👏</div>`:''}</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de anúncios e campanhas</h3><div class="sub">Ordenado por lucro · os anúncios são um detalhamento e não alteram os totais do dia</div></div></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Anúncio</th><th>Plataforma</th><th class="r">Dias</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">CPC</th><th class="r">Vendas</th><th class="r">CPA</th><th class="r">Faturamento</th><th class="r">EPC</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead>
-      <tbody>${ads.map((a,i)=>`<tr class="${i===0&&a.profit>0?'top1':''}"><td class="faint num">${i+1}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis"><b>${esc(a.name)}</b> ${[...a.ccs].map(cc=>flag(cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}</tbody></table></div></div>
-    <div class="card"><div class="card-h"><div><h3>ROAS por anúncio / campanha</h3><div class="sub">Top 10 · linha de corte em 1,0</div></div></div><div class="chart-box" style="height:${Math.max(200,Math.min(10,ads.length)*40+40)}px"><canvas id="chAds"></canvas></div></div>`;
+    <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de campanhas</h3><div class="sub">Ordenado por lucro${ads.some(a=>a.est)?' · <b>≈</b> = estimado: as vendas e o faturamento do país divididos entre as campanhas dele, proporcional aos initiate checkouts (ou aos cliques, quando não há checkout). Para o número exato, lance as vendas na própria campanha.':''}</div></div></div>
+      <div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>#</th><th>Campanha</th><th>Plataforma</th><th class="r">Dias</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">CPC</th><th class="r">Checkouts</th><th class="r">Vendas</th><th class="r">CPA</th><th class="r">Faturamento</th><th class="r">EPC</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead>
+      <tbody>${ads.map((a,i)=>`<tr class="${i===0&&a.profit>0?'top1':''}"><td class="faint num">${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${[...a.ccs].map(cc=>flag(cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="card"><div class="card-h"><div><h3>ROAS por campanha</h3><div class="sub">Top 10 · linha de corte em 1,0</div></div></div><div class="chart-box" style="height:${Math.max(200,Math.min(10,ads.length)*40+40)}px"><canvas id="chAds"></canvas></div></div>`;
 }
 
 /* ================= countries tab ================= */
@@ -1277,7 +1296,7 @@ function renderHistory(dates){
       <td class="r num ${t.profit>=0?'pos':'neg'}">${money(t.profit)}</td><td class="r num">${xf(r.roas)}</td>
       <td><span class="status ${t.profit>=0?'pos':'neg'}">${t.profit>=0?'Lucro':'Prejuízo'}</span></td>
       <td class="r"><button class="btn sm ghost edit-only" data-edit="${d}">${ICON.edit}Editar</button></td></tr>
-      ${open?`<tr class="detail"><td colspan="11"><div class="dchips">${det||'<span class="muted">Sem detalhes.</span>'}</div>${ads?`<div style="font-size:12px;font-weight:800;color:var(--muted);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">Anúncios / campanhas</div><div class="dchips">${ads}</div>`:''}${extra?`<div class="muted" style="font-size:13px;margin-top:8px">${extra}</div>`:''}</td></tr>`:''}`}).join('');
+      ${open?`<tr class="detail"><td colspan="11"><div class="dchips">${det||'<span class="muted">Sem detalhes.</span>'}</div>${ads?`<div style="font-size:12px;font-weight:800;color:var(--muted);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">Campanhas</div><div class="dchips">${ads}</div>`:''}${extra?`<div class="muted" style="font-size:13px;margin-top:8px">${extra}</div>`:''}</td></tr>`:''}`}).join('');
   $$('#histBody tr.main-row').forEach(tr=>tr.onclick=ev=>{if(ev.target.closest('[data-edit]'))return;ui.open=ui.open===tr.dataset.d?null:tr.dataset.d;renderHistory(rangeDates())});
   $$('#histBody [data-edit]').forEach(b=>b.onclick=()=>openEntry(b.dataset.edit));
 }
@@ -1365,17 +1384,17 @@ function updTabTotals(){$$('#ptabs .ptab').forEach(b=>{const t=rowTotals(b.datas
 function adNamesList(){const s=new Set();for(const e of Object.values(state.entries))for(const a of e.ads||[])if(a.name)s.add(a.name);return[...s].slice(0,300)}
 function renderAds2(){
   const cs=[...new Set([...state.settings.countries,...draft.rows.map(r=>r.cc)])],ps=draftPlatforms();
-  if(!draft.ads.length){$('#adRows').innerHTML=`<div class="muted" style="font-size:13px">Nenhum anúncio. Clique em “+ Anúncio” para registrar gasto e vendas por criativo.</div>`;return}
-  let h=`<div class="adrow head"><div>Nome / ID do anúncio</div><div>Plataforma</div><div>País</div><div style="text-align:right">Investimento</div><div style="text-align:right">Cliques</div><div style="text-align:right">Vendas</div><div style="text-align:right">Faturamento</div><div></div></div>`;
+  if(!draft.ads.length){$('#adRows').innerHTML=`<div class="muted" style="font-size:13px">Nenhuma campanha. Importe a planilha da MGID ou clique em “+ Campanha”.</div>`;return}
+  let h=`<div class="adrow head"><div>Campanha</div><div>Plataforma</div><div>País</div><div style="text-align:right">Investimento</div><div style="text-align:right">Cliques</div><div style="text-align:right">Vendas</div><div style="text-align:right">Faturamento</div><div></div></div>`;
   h+=draft.ads.map((a,i)=>`<div class="adrow" data-i="${i}" style="margin-top:6px">
-    <div><span class="lbl-m">Anúncio</span><input class="inp" data-f="name" list="adNames" placeholder="Ex.: TB · Advertorial médico v2" value="${esc(a.name)}"></div>
+    <div><span class="lbl-m">Campanha</span><input class="inp" data-f="name" list="adNames" placeholder="Ex.: 13.10 | Open | Memory | Chile" value="${esc(a.name)}"></div>
     <div><span class="lbl-m">Plataforma</span><select class="inp" data-f="p">${ps.map(p=>`<option value="${p}" ${a.p===p?'selected':''}>${esc(pname(p))}</option>`).join('')}</select></div>
     <div><span class="lbl-m">País</span><select class="inp" data-f="cc"><option value="">Todos</option>${cs.map(cc=>`<option value="${cc}" ${a.cc===cc?'selected':''}>${esc(cname(cc))}</option>`).join('')}</select></div>
     <div><span class="lbl-m">Investimento</span><input class="inp n" data-f="spend" inputmode="decimal" placeholder="0" value="${fmtIn(a.spend)}"></div>
     <div><span class="lbl-m">Cliques</span><input class="inp n" data-f="clicks" inputmode="numeric" placeholder="0" value="${fmtIn(a.clicks)}"></div>
     <div><span class="lbl-m">Vendas</span><input class="inp n" data-f="sales" inputmode="numeric" placeholder="0" value="${fmtIn(a.sales)}"></div>
     <div><span class="lbl-m">Faturamento</span><input class="inp n" data-f="rev" inputmode="decimal" placeholder="0" value="${fmtIn(a.rev)}"></div>
-    <button type="button" class="x" title="Remover anúncio">${ICON.x}</button></div>`).join('');
+    <button type="button" class="x" title="Remover campanha">${ICON.x}</button></div>`).join('');
   h+=`<div class="adnote" id="adNote"></div>`;
   $('#adRows').innerHTML=h;
   $$('#adRows .adrow[data-i]').forEach(row=>{const a=draft.ads[+row.dataset.i];
@@ -1385,7 +1404,10 @@ function renderAds2(){
   updAdNote();
 }
 function updAdNote(){const el=$('#adNote');if(!el)return;const s=draft.ads.reduce((a,x)=>a+num(x.spend),0),v=draft.ads.reduce((a,x)=>a+num(x.sales),0),t=draft.rows.reduce((a,x)=>a+num(x.spend),0),ts=draft.rows.reduce((a,x)=>a+num(x.sales),0);
-  el.innerHTML=t?`Os anúncios somam <b class="num">${money(s)}</b> de <b class="num">${money(t)}</b> investidos (${pctf(s/t,0)}) e <b class="num">${intf(v)}</b> de <b class="num">${intf(ts)}</b> vendas. Não precisa bater 100% — é só para comparar criativos.`:''}
+  el.innerHTML=t?`As campanhas somam <b class="num">${money(s)}</b> de <b class="num">${money(t)}</b> investidos (${pctf(s/t,0)}). Vendas em branco são estimadas pelas vendas do país (o valor aparece em cinza); digite para usar o número exato.`:'';
+  const al=allocAds({rows:buildEntry().rows,ads:draft.ads});
+  $$('#adRows .adrow[data-i]').forEach(row=>{const x=al[+row.dataset.i];if(!x)return;const si=$('[data-f=sales]',row),ri=$('[data-f=rev]',row);
+    if(si)si.placeholder=x.est&&x.sales>0?'≈ '+x.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):'0';if(ri)ri.placeholder=x.est&&x.rev>0?'≈ '+fmtIn(Math.round(x.rev)):'0'})}
 function loadForm(d){
   editingDate=state.entries[d]?d:null;
   const e=state.entries[d]?clone(state.entries[d]):{rows:[],ads:[],refunds:0,other:0,notes:''};
@@ -1403,10 +1425,11 @@ function buildEntry(){
   const tk=num(state.settings.ticket);
   const rows=draft.rows.filter(r=>NUMK.some(k=>num(r[k]))).map(r=>{const o={p:r.p,cc:r.cc};NUMK.forEach(k=>o[k]=num(r[k]));if(!o.rev&&o.sales&&tk)o.rev=o.sales*tk;return o});
   const ads0=draft.ads;
-  const ads=draft.ads.filter(a=>(a.name||'').trim()||num(a.spend)||num(a.sales)).map(a=>({name:(a.name||'').trim()||'Sem nome',p:a.p,cc:a.cc||'',spend:num(a.spend),clicks:num(a.clicks),sales:num(a.sales),rev:num(a.rev)||(num(a.sales)&&tk?num(a.sales)*tk:0)}));
+  const ads=draft.ads.filter(a=>(a.name||'').trim()||num(a.spend)||num(a.sales)).map(a=>({name:(a.name||'').trim()||'Sem nome',p:a.p,cc:a.cc||'',spend:num(a.spend),clicks:num(a.clicks),pv:num(a.pv),ic:num(a.ic),sales:num(a.sales),rev:num(a.rev)||(num(a.sales)&&tk?num(a.sales)*tk:0)}));
   return{rows,ads,refunds:parseNum($('#eRefunds').value),other:parseNum($('#eOther').value),notes:$('#eNotes').value.trim()};
 }
 function updSummary(){
+  if($('#adNote'))setTimeout(updAdNote,0);
   const e=buildEntry(),t=tot(e),r=ratios(t);
   const items=[['Investimento',money(t.spend)],['Faturamento total',money(t.rev)]];
   if(fOn('clicks'))items.push(['CPC · EPC',`${moneyP(r.cpc)} · ${moneyP(r.epc)}`]);
@@ -1439,10 +1462,10 @@ function onSave(ev){
 function onDelete(){if(!editingDate)return;if(!confirm(`Excluir o lançamento de ${dShort(editingDate)}?`))return;const dd=editingDate;delete state.entries[dd];save('del',dd);closeEntry();toast('Lançamento excluído');renderAll()}
 function copyLastAds(){
   const d=$('#eDate').value,keys=sortedKeys().filter(k=>k<d&&(state.entries[k].ads||[]).length);
-  if(!keys.length){toast('Nenhum dia anterior com anúncios','err');return}
+  if(!keys.length){toast('Nenhum dia anterior com campanhas','err');return}
   const src=state.entries[keys[keys.length-1]].ads;const have=new Set(draft.ads.map(a=>a.p+'|'+norm(a.name)));
-  let n=0;src.forEach(a=>{if(!have.has(a.p+'|'+norm(a.name))){draft.ads.push({name:a.name,p:a.p,cc:a.cc||'',spend:0,clicks:0,sales:0,rev:0});n++}});
-  renderAds2();toast(n?`${n} anúncios de ${dShort(keys[keys.length-1])} adicionados — preencha os números`:'Esses anúncios já estão na lista');
+  let n=0;src.forEach(a=>{if(!have.has(a.p+'|'+norm(a.name))){draft.ads.push({name:a.name,p:a.p,cc:a.cc||'',spend:0,clicks:0,pv:0,ic:0,sales:0,rev:0});n++}});
+  renderAds2();toast(n?`${n} campanhas de ${dShort(keys[keys.length-1])} adicionadas — preencha os números`:'Essas campanhas já estão na lista');
 }
 
 /* ================= OCR ================= */
@@ -1591,7 +1614,7 @@ function sheetCompute(){
     if(!v.spend&&!v.imp&&!v.clicks&&!v.pv&&!v.ic&&!v.purchase)continue;
     n++;
     const o=byCC[cc]||(byCC[cc]={spend:0,imp:0,clicks:0,pv:0,ic:0,purchase:0});for(const k in v)o[k]+=v[k];
-    if(camp){const c=camps[camp]||(camps[camp]={spend:0,clicks:0,purchase:0,ccs:new Set()});c.spend+=v.spend;c.clicks+=v.clicks;c.purchase+=v.purchase;c.ccs.add(cc)}
+    if(camp){const c=camps[camp]||(camps[camp]={spend:0,clicks:0,pv:0,ic:0,purchase:0,ccs:new Set()});c.spend+=v.spend;c.clicks+=v.clicks;c.pv+=v.pv;c.ic+=v.ic;c.purchase+=v.purchase;c.ccs.add(cc)}
   }
   return{byCC,camps,n};
 }
@@ -1621,7 +1644,7 @@ function renderSheet(){
     </div>
     <div class="imp-note">🚫 <b>Receita e ROAS da planilha não são importados</b>${ignored.length?` (ignorei: ${ignored.map(esc).join(', ')})`:''} — o faturamento vem das vendas que você lança e o ROAS é calculado pelo painel.${m.purchase<0&&IMP_det.purchase>=0?` A coluna “${esc(H[IMP_det.purchase])}” (compras do pixel) também ficou de fora, já que você lança as vendas; se quiser usar, escolha em “Compras (pixel)”.`:''}${m.purchase>=0?' Compras (pixel) vão preencher “Vendas front”.':''}</div>
     ${dateNote}${campTbl}${prev}
-    ${m.campaign>=0?`<label class="toggle" style="padding:8px 10px"><input type="checkbox" id="impCamps" ${IMP.addCamps?'checked':''}><div><b>Adicionar as campanhas no ranking de anúncios/campanhas</b><span>Entram com investimento e cliques; as vendas de cada campanha você completa se quiser.</span></div></label>`:''}
+    ${m.campaign>=0?`<label class="toggle" style="padding:8px 10px"><input type="checkbox" id="impCamps" ${IMP.addCamps?'checked':''}><div><b>Adicionar as campanhas no ranking de campanhas</b><span>Entram com investimento, cliques e checkouts; as vendas de cada campanha são estimadas pelas vendas do país (ou você digita o número exato).</span></div></label>`:''}
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn sm ghost" id="impCancel">Cancelar</button><button type="button" class="btn sm primary" id="impApply" ${ccs.length?'':'disabled'}>Aplicar na aba ${esc(pname(IMP.platform))}</button></div>
   </div>`;
   $$('#ocrOut [data-map]').forEach(s=>s.onchange=()=>{IMP.map[s.dataset.map]=+s.value;renderSheet()});
@@ -1645,7 +1668,7 @@ function applySheet(){
     if(m.purchase>=0){r.sales=Math.round(o.purchase);flash.add(cc+'|sales')}
   }
   let nc=0;
-  if(IMP.addCamps&&m.campaign>=0){for(const[name,c]of Object.entries(camps)){const cc=c.ccs.size===1?[...c.ccs][0]:'XX';let a=draft.ads.find(x=>x.p===P&&norm(x.name)===norm(name));if(!a){a={name,p:P,cc:cc==='XX'?'':cc,spend:0,clicks:0,sales:0,rev:0};draft.ads.push(a)}a.spend=Math.round(c.spend*100)/100;a.clicks=Math.round(c.clicks);if(m.purchase>=0)a.sales=Math.round(c.purchase);nc++}}
+  if(IMP.addCamps&&m.campaign>=0){for(const[name,c]of Object.entries(camps)){const cc=c.ccs.size===1?[...c.ccs][0]:'XX';let a=draft.ads.find(x=>x.p===P&&norm(x.name)===norm(name));if(!a){a={name,p:P,cc:cc==='XX'?'':cc,spend:0,clicks:0,sales:0,rev:0};draft.ads.push(a)}a.spend=Math.round(c.spend*100)/100;a.clicks=Math.round(c.clicks);a.pv=Math.round(c.pv);a.ic=Math.round(c.ic);if(m.purchase>=0)a.sales=Math.round(c.purchase);nc++}}
   // preferências para a próxima importação
   const s=state.settings;s.importMap={};for(const[k]of SHEET_FIELDS)s.importMap[k]=m[k]>=0?IMP.H[m[k]]:null;
   s.campMap={...(s.campMap||{}),...IMP.campCC};s.sheetCur=IMP.cur;if(IMP.cur!=='SAME')s.fx=num(IMP.fx);
