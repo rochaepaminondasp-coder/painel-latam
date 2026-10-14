@@ -891,17 +891,21 @@ function groupBy(dates,keyFn,f){
    do país (mesma plataforma) são divididos entre as campanhas dele pelos initiate checkouts
    (ou page views / cliques / investimento, o que todas tiverem). */
 function allocAds(e){
-  const ads=e.ads||[],out=ads.map(a=>({sales:num(a.sales),rev:num(a.rev),est:false})),groups={};
+  const ads=e.ads||[],out=ads.map(a=>({sales:num(a.sales),rev:num(a.rev),est:false,ic:num(a.ic),icEst:false})),groups={};
   ads.forEach((a,i)=>{const k=a.p+'|'+(a.cc||'XX');(groups[k]=groups[k]||[]).push(i)});
   for(const[k,idx]of Object.entries(groups)){
     const[p,cc]=k.split('|');const row=(e.rows||[]).find(r=>r.p===p&&r.cc===cc);if(!row)continue;
+    // checkouts: campanhas importadas antes de guardar IC por campanha recebem o IC do país (dividido pelos cliques)
+    if(num(row.ic)>0&&idx.every(i=>!num(ads[i].ic))){const wk=idx.every(i=>num(ads[i].clicks)>0)?'clicks':'spend',Wi=idx.reduce((s,i)=>s+num(ads[i][wk]),0);
+      idx.forEach(i=>{out[i].ic=Wi?num(row.ic)*num(ads[i][wk])/Wi:num(row.ic)/idx.length;out[i].icEst=idx.length>1})}
     const manual=idx.filter(i=>num(ads[i].sales)||num(ads[i].rev)),auto=idx.filter(i=>!manual.includes(i));if(!auto.length)continue;
     const S=Math.max(0,num(row.sales)-manual.reduce((s,i)=>s+num(ads[i].sales),0));
     const Rv=Math.max(0,num(row.rev)+num(row.upsRev)-manual.reduce((s,i)=>s+num(ads[i].rev),0));
     if(!S&&!Rv)continue;
-    const key=['ic','pv','clicks','spend'].find(f=>auto.every(i=>num(ads[i][f])>0))||'spend';
-    const W=auto.reduce((s,i)=>s+num(ads[i][key]),0);
-    auto.forEach(i=>{const w=W?num(ads[i][key])/W:1/auto.length;out[i]={sales:S*w,rev:Rv*w,est:true,by:key}});
+    const wt=i=>key==='ic'?out[i].ic:num(ads[i][key]);
+    const key=['ic','pv','clicks','spend'].find(f=>auto.every(i=>(f==='ic'?out[i].ic:num(ads[i][f]))>0))||'spend';
+    const W=auto.reduce((s,i)=>s+wt(i),0);
+    auto.forEach(i=>{const w=W?wt(i)/W:1/auto.length;Object.assign(out[i],{sales:S*w,rev:Rv*w,est:true,by:key})});
   }
   return out;
 }
@@ -909,8 +913,8 @@ function adStats(dates){
   const m={};
   for(const d of dates){const e=state.entries[d];if(!e)continue;const al=allocAds(e);(e.ads||[]).forEach((a,i)=>{
     if(ui.platform!=='ALL'&&a.p!==ui.platform)return;if(ui.country!=='ALL'&&a.cc&&a.cc!==ui.country)return;
-    const k=a.p+'|'+norm(a.name||'').trim();const o=m[k]||(m[k]={name:a.name||'Sem nome',p:a.p,ccs:new Set(),days:new Set(),spend:0,clicks:0,ic:0,sales:0,rev:0,est:false});
-    o.spend+=num(a.spend);o.clicks+=num(a.clicks);o.ic+=num(a.ic);o.sales+=al[i].sales;o.rev+=al[i].rev;if(al[i].est)o.est=true;o.days.add(d);if(a.cc)o.ccs.add(a.cc)})}
+    const k=a.p+'|'+norm(a.name||'').trim();const o=m[k]||(m[k]={name:a.name||'Sem nome',p:a.p,ccs:new Set(),days:new Set(),spend:0,clicks:0,ic:0,sales:0,rev:0,est:false,icEst:false});
+    o.spend+=num(a.spend);o.clicks+=num(a.clicks);o.ic+=al[i].ic;if(al[i].icEst)o.icEst=true;o.sales+=al[i].sales;o.rev+=al[i].rev;if(al[i].est)o.est=true;o.days.add(d);if(a.cc)o.ccs.add(a.cc)})}
   const arr=Object.values(m).filter(o=>o.spend||o.sales||o.rev);
   arr.forEach(o=>{o.profit=o.rev-o.spend-o.rev*fee();o.roas=o.spend?o.rev/o.spend:null;o.cpa=o.sales?o.spend/o.sales:null;o.cpc=o.clicks?o.spend/o.clicks:null;o.epc=o.clicks?o.rev/o.clicks:null;o.cpic=o.ic?o.spend/o.ic:null;o.nd=o.days.size});
   return arr.sort((a,b)=>b.profit-a.profit);
@@ -1260,7 +1264,7 @@ function renderAds(dates){
     </div>
     <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de campanhas</h3><div class="sub">Ordenado por lucro${ads.some(a=>a.est)?' · <b>≈</b> = estimado: as vendas e o faturamento do país divididos entre as campanhas dele, proporcional aos initiate checkouts (ou aos cliques, quando não há checkout). Para o número exato, lance as vendas na própria campanha.':''}</div></div></div>
       <div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>#</th><th>Campanha</th><th>Plataforma</th><th class="r">Dias</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">CPC</th><th class="r">Checkouts</th><th class="r">Vendas</th><th class="r">CPA</th><th class="r">Faturamento</th><th class="r">EPC</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead>
-      <tbody>${ads.map((a,i)=>`<tr class="${i===0&&a.profit>0?'top1':''}"><td class="faint num">${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${[...a.ccs].map(cc=>flag(cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}</tbody></table></div></div>
+      <tbody>${ads.map((a,i)=>`<tr class="${i===0&&a.profit>0?'top1':''}"><td class="faint num">${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${[...a.ccs].map(cc=>flag(cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?(a.icEst?'<span class="faint">≈</span>':'')+intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="card"><div class="card-h"><div><h3>ROAS por campanha</h3><div class="sub">Top 10 · linha de corte em 1,0</div></div></div><div class="chart-box" style="height:${Math.max(200,Math.min(10,ads.length)*40+40)}px"><canvas id="chAds"></canvas></div></div>`;
 }
 
