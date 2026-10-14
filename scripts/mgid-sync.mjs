@@ -144,6 +144,8 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       const a = known || (e.ads.push({ name, p: P, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: 0, clicks: 0, sales: 0, rev: 0 }), e.ads[e.ads.length - 1]);
       Object.assign(a, { name, cid: c.cid, spend: c.spend, clicks: c.clicks, pv: c.pv, ic: c.ic });
     }
+    const seen = new Set(camps.map(c => c.cid));
+    e.ads.forEach(a => { if (a.p === P && a.cid && !seen.has(String(a.cid))) Object.assign(a, { spend: 0, clicks: 0, pv: 0, ic: 0 }); });
     const after = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P)]);
     if (before === after && e.mg) continue;
     e.mg = { at: new Date().toISOString(), src: 'mgid' };
