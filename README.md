@@ -1,107 +1,91 @@
 # Painel LATAM 📊
 
-Painel diário de resultados para infoproduto rodando em vários países da América Latina.
-Você lança, todo dia, o resultado de ontem (investimento em tráfego, vendas e faturamento por país). O painel calcula lucro, ROAS, CPA, ticket médio e margem, e mostra quais dias deram lucro ou prejuízo e para qual país vale mandar mais verba.
+Painel diário de resultados para infoproduto rodando **native ads** (Taboola, MGID, Outbrain, Revcontent…) em vários países da América Latina.
 
-É **um único arquivo** (`index.html`), sem servidor, sem build e sem banco de dados.
+Todo dia você lança o resultado de ontem **por plataforma e por país**: investimento, impressões, cliques, cliques no link, checkouts iniciados, vendas e faturamento. O painel monta o funil completo e calcula lucro, ROAS, CPA, CPC, CTR, CPM, EPC e conversões. Ele também mostra qual plataforma, país e anúncio estão dando mais lucro.
 
----
+É **um único arquivo** (`index.html`), sem servidor e sem banco de dados.
 
-## Como publicar no GitHub Pages
-
-1. Crie um repositório novo no GitHub (ex.: `painel-latam`). Pode ser **privado** se seu plano permitir Pages privado; senão, público (os dados **não** ficam no repositório, ficam no seu navegador).
-2. Envie os arquivos `index.html` e `README.md`:
-   - Pelo site: **Add file → Upload files** → arraste os dois → **Commit changes**.
-   - Ou pelo terminal:
-     ```bash
-     git init
-     git add index.html README.md
-     git commit -m "Painel LATAM"
-     git branch -M main
-     git remote add origin https://github.com/SEU-USUARIO/painel-latam.git
-     git push -u origin main
-     ```
-3. No repositório: **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main` / `(root)` → Save**.
-4. Em 1–2 minutos o painel fica no ar em `https://SEU-USUARIO.github.io/painel-latam/`.
-
-Também funciona abrindo o `index.html` direto no navegador (duplo clique).
+🔗 **Painel no ar:** https://rochaepaminondasp-coder.github.io/painel-latam/
 
 ---
 
-## Rotina diária (1 minuto)
+## Rotina diária
 
-1. Abra o painel. Se o dia de ontem ainda não foi lançado, aparece um aviso amarelo com o botão **Lançar dd/mm**.
-2. Para cada país, preencha **Investimento**, **Vendas** e **Faturamento**. O resumo no rodapé já mostra o lucro do dia antes de salvar.
-3. (Opcional) Reembolsos, outros custos e uma observação ("subi criativo novo no Chile").
-4. **Salvar dia**.
+1. Abra o painel. Se o dia de ontem ainda não foi lançado, aparece um aviso com o botão **Lançar dd/mm**.
+2. **Bloco 1 — Resultados por plataforma e país:** escolha a aba da plataforma (Taboola, MGID…). Preencha cada país; embaixo de cada linha já aparecem CPC, CTR, EPC, CPA e ROAS. Troque de aba e repita para a outra plataforma.
+3. **Bloco 2 — Anúncios do dia (opcional):** nome ou ID do anúncio, plataforma, país, investimento, cliques, vendas e faturamento.
+   - **Repetir anúncios do último dia** já traz os mesmos criativos; é só preencher os números.
+   - Os anúncios são um detalhamento: servem para comparar criativos e **não somam** nos totais do dia.
+4. **Bloco 3:** reembolsos, outros custos e observações.
+5. **Salvar dia**.
 
-Se ficar alguns dias sem lançar, o aviso mostra quantos faltam e abre o mais antigo primeiro.
 Atalho: tecla **N** abre um novo lançamento.
 
 ### Preencher a partir de um print
 
-No formulário há a área **Preencher a partir de um print**: arraste a imagem, cole com **Ctrl+V** ou clique para escolher.
+Na aba da plataforma, arraste, cole (**Ctrl+V**) ou clique na área de print:
 
-- **Relatório de vendas**: use um print do relatório da plataforma (Hotmart, Kiwify, Eduzz, etc.) **agrupado por país**. O painel lê o nome do país e os números da mesma linha e preenche *Vendas* e *Faturamento*.
-- **Gasto em anúncios**: use um print do gerenciador de anúncios quebrado por país. O painel preenche *Investimento*.
+- **Relatório do native**: print do Taboola/MGID **quebrado por país**. Preenche investimento, impressões e cliques.
+- **Relatório de vendas**: print da plataforma de vendas por país. Preenche vendas e faturamento.
 
-A leitura (OCR) roda no seu navegador. Nada é enviado para servidor. Na primeira vez ele baixa o leitor (~10 MB). **Sempre confira os números** destacados antes de salvar; prints com fonte pequena ou colunas desalinhadas podem ser lidos errado.
+A leitura roda no seu navegador (nada é enviado para servidor). **Sempre confira** os números destacados antes de salvar.
 
 ---
 
 ## O que o painel mostra
 
-**Visão geral**
-- KPIs com variação vs. período anterior: lucro líquido, faturamento, investimento, ROAS, vendas, CPA, ticket médio, margem.
-- Gráfico combinado de faturamento × investimento × lucro por dia (a linha fica vermelha nos dias de prejuízo).
-- Lucro diário (verde/vermelho) e lucro acumulado.
-- Calendário de resultados: cada quadradinho é um dia; tracejado = não lançado. Clique para lançar ou editar.
-- Resumo do período: dias no lucro × prejuízo, melhor e pior dia, melhor país, sequência de dias no lucro e progresso da meta.
+| Aba | Conteúdo |
+|---|---|
+| **Visão geral** | KPIs financeiros, **funil do native** (impressões → cliques → cliques no link → checkouts → vendas, com a taxa entre etapas e o custo de cada uma), métricas de tráfego (CTR, CPC, EPC, CPM, CTR da presell, taxa de checkout, conversão, custo por checkout), EPC × CPC, taxas do funil, lucro diário e acumulado, calendário de lucro/prejuízo e vendas por país |
+| **Plataformas** | Card de cada plataforma com selo Escalar/Lucrativo/Revisar, **matriz Plataforma × País** (ROAS, lucro, CPA, EPC, CPC ou CTR), lucro diário por plataforma |
+| **Anúncios** | 🏆 Melhor anúncio do período, alerta de anúncios queimando verba, ranking completo e ROAS por anúncio |
+| **Países** | Sugestão de distribuição de verba, ranking de países e tendência |
+| **Histórico** | Todos os dias, com detalhe por plataforma, país e anúncio; exportar CSV |
 
-**Países**
-- Ranking por lucro com selo **Escalar / Lucrativo / Revisar**.
-- **Onde colocar a verba**: distribuição sugerida proporcional ao lucro de cada país vs. quanto ele recebe hoje.
-- ROAS por país (com linha de corte em 1,0x) e tendência de faturamento por país.
-
-**Histórico**: tabela de todos os dias (clique para ver o detalhe por país), editar/excluir e exportar CSV.
-
-**Filtros**: 7d, 14d, 30d, mês, 90d, tudo ou período personalizado, e filtro por país.
+Filtros no topo: período (7d, 14d, 30d, mês, 90d, tudo, personalizado), **plataforma** e **país**.
 
 ---
 
-## Configurações e cálculos
-
-| Configuração | Para que serve |
-|---|---|
-| Moeda de exibição | R$, US$ ou €. Lance os valores **já convertidos** para essa moeda. |
-| Taxas da plataforma (%) | Descontadas do faturamento (gateway, impostos, câmbio). |
-| Ticket padrão | Se você só informar o nº de vendas, o faturamento é calculado como vendas × ticket. |
-| Meta de lucro diário | Mostra a barra de progresso e quantos dias bateram a meta. |
-| Países | Quais países já aparecem prontos no formulário. |
+## Fórmulas
 
 ```
 Lucro = Faturamento − Investimento − (Faturamento × Taxa%) − Reembolsos − Outros custos
-ROAS  = Faturamento ÷ Investimento
-CPA   = Investimento ÷ Vendas
-Ticket médio = Faturamento ÷ Vendas
+ROAS  = Faturamento ÷ Investimento        CPA  = Investimento ÷ Vendas
+CTR   = Cliques ÷ Impressões              CPC  = Investimento ÷ Cliques
+CPM   = Investimento ÷ Impressões × 1000  EPC  = Faturamento ÷ Cliques
+CTR da presell     = Cliques no link ÷ Cliques
+Taxa de checkout   = Checkouts iniciados ÷ Cliques no link
+Conversão checkout = Vendas ÷ Checkouts iniciados
 ```
 
-Na visão por país, o lucro considera faturamento, investimento e taxas. Reembolsos e outros custos são lançados no total do dia.
+**EPC acima do CPC = cada clique está dando lucro.**
+
+---
+
+## Configurações
+
+- **Moeda**: R$, US$ ou €. Lance os valores já convertidos.
+- **Taxa da plataforma de vendas (%)**: descontada do faturamento.
+- **Ticket padrão**: faturamento automático = vendas × ticket.
+- **Meta de lucro diário**.
+- **Métricas do funil**: ligue ou desligue impressões, cliques, cliques no link e checkouts.
+- **Plataformas** e **países** que aparecem no lançamento.
 
 ---
 
 ## ⚠️ Onde ficam os dados
 
-Os lançamentos ficam salvos **no navegador** (localStorage), não no GitHub. Isso significa:
+Os lançamentos ficam salvos **no navegador**, não no GitHub.
 
-- Se você limpar os dados do navegador ou usar outro computador, eles não estarão lá.
-- **Exporte um backup** com frequência (ícone ⬇ no topo ou *Configurações → Exportar backup*). É um arquivo `.json`.
-- Para usar em outro computador ou celular: abra o painel lá e use **Importar backup**.
+- **Exporte um backup** com frequência (ícone ⬇ no topo).
+- Para usar em outro computador ou no celular, use **Importar backup** lá.
+- Lançamentos feitos na versão anterior do painel continuam valendo. Eles aparecem com a plataforma "Não informada".
 
-Para testar sem bagunçar nada: *Configurações → Carregar dados de exemplo*. Depois clique em **Limpar exemplo**.
+Para testar: *Configurações → Carregar dados de exemplo* e depois **Limpar exemplo**.
 
 ---
 
-## Tecnologias
+## Como atualizar no GitHub Pages
 
-HTML + CSS + JavaScript puro, [Chart.js](https://www.chartjs.org/) para os gráficos, [Tesseract.js](https://tesseract.projectnaptha.com/) para ler prints, bandeiras do [flagcdn](https://flagcdn.com). Tema claro/escuro e layout responsivo (celular, tablet e desktop).
+Substitua o `index.html` no repositório (Add file → Upload files) e faça o commit. Em 1–2 minutos a nova versão está no ar.
