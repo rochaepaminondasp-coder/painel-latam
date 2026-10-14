@@ -95,7 +95,17 @@ async function fetchSales(from, to) {
 }
 
 /* ---------- cotação USD→BRL do dia ---------- */
+// 1º PTAX do Banco Central (venda); em fim de semana/feriado usa o último dia útil anterior.
+// Reserva: AwesomeAPI. Se nada responder, o painel usa a cotação fixa das Configurações (ou 5,40).
+const BCB = 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@dataCotacao)';
 async function usdBrl(day) {
+  for (let back = 0; back < 6; back++) {
+    const d = addDays(day, -back), [y, m, dd] = d.split('-');
+    try {
+      const r = await fetch(`${BCB}?@dataCotacao='${m}-${dd}-${y}'&$format=json`, { headers: { Accept: 'application/json' } });
+      if (r.ok) { const j = await r.json(); const v = Number(j?.value?.[0]?.cotacaoVenda); if (v > 0) return Math.round(v * 10000) / 10000; }
+    } catch {}
+  }
   try {
     const d = day.replace(/-/g, '');
     const r = await fetch(`${FX_API}?start_date=${d}&end_date=${d}`);
