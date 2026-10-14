@@ -1177,7 +1177,7 @@ function renderLive(){
   ];
   const camps=eT?adStats([t0]).filter(a=>a.spend>0||a.sales>0).sort((a,b)=>b.spend-a.spend):[];
   box.innerHTML=`<div class="grid g-live" style="margin-bottom:14px">
-    <div class="card"><div class="card-h"><div><h3><span class="live-dot"></span>Hoje × Ontem</h3><div class="sub">${at?`Atualizado ${agoTxt(at)} · `:''}hoje é parcial (até agora)</div></div></div>
+    <div class="card"><div class="card-h"><div><h3><span class="live-dot"></span>Hoje × Ontem</h3><div class="sub">${kick.msg?esc(kick.msg):`${at?`Atualizado ${agoTxt(at)} · `:''}hoje é parcial (até agora)`}</div></div><button class="btn sm edit-only" id="btnKick" ${kick.busy?'disabled':''}>${kick.busy?'Atualizando…':'↻ Atualizar agora'}</button></div>
       <table class="tbl live-t"><thead><tr><th></th><th class="r">Hoje</th><th class="r">Ontem</th></tr></thead><tbody>
       ${rows.map(([l,fn,cl])=>`<tr><td class="muted" style="font-weight:700">${l}</td>${T?cell(fn(T,rT),cl?cl(T,rT):''):cell('—')}${Y?cell(fn(Y,rY),cl?cl(Y,rY):''):cell('—')}</tr>`).join('')}
       </tbody></table></div>
@@ -1186,6 +1186,7 @@ function renderLive(){
       ${camps.map(a=>`<tr><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b></td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${a.ic?intf(a.ic):'—'}</td><td class="r num">${a.est?'≈':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}
       </tbody></table></div>`:`<div class="muted" style="font-size:13.5px">Ainda sem dados de campanhas hoje. O robô atualiza a cada ~5 minutos.</div>`}
     </div></div>`;
+  const kb=$('#btnKick');if(kb)kb.onclick=()=>dispatchSync(true);
 }
 
 /* ================= charts ================= */
@@ -1887,17 +1888,37 @@ function renderShare(){
       <li>Abra <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> (logado na sua conta)</li>
       <li><b>Token name:</b> painel-latam · <b>Expiration:</b> escolha um prazo (ex.: 1 ano)</li>
       <li><b>Repository access:</b> Only select repositories → <b>${esc(GH.repo)}</b></li>
-      <li><b>Permissions → Repository permissions → Contents:</b> Read and write</li>
+      <li><b>Permissions → Repository permissions:</b> <b>Contents</b> = Read and write <b>e</b> <b>Actions</b> = Read and write</li>
       <li>Clique em <b>Generate token</b>, copie e cole aqui embaixo</li>
     </ol>
     <div class="share-box"><input class="inp" id="tokInput" type="password" placeholder="github_pat_…" autocomplete="off"><button type="button" class="btn primary sm" id="btnConnect">Conectar</button></div>
     <div class="imp-note" style="margin-top:8px">O token fica salvo só neste navegador e só dá acesso a este repositório. Quem abrir o link sem token só visualiza.</div>`;
   $('#btnConnect').onclick=connectToken;$('#tokInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();connectToken()}};
 }
+/* ---- disparar o robô (MGID + Ratoeira) a partir do painel ---- */
+const LS_KICK='painel-latam-kick';
+const kick={busy:false,msg:''};
+async function dispatchSync(manual){
+  if(!isEditor()||kick.busy)return;
+  if(!manual){let last=0;try{last=+localStorage.getItem(LS_KICK)||0}catch(e){}if(Date.now()-last<8*60000)return}
+  try{localStorage.setItem(LS_KICK,String(Date.now()))}catch(e){}
+  kick.busy=true;kick.msg='Pedindo dados novos à MGID e à Ratoeira…';renderLive();
+  let ok=false;
+  try{const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/actions/workflows/ratoeira.yml/dispatches`,{method:'POST',headers:ghHeaders(true),body:JSON.stringify({ref:'main',inputs:{days:'1'}})});
+    ok=r.status===204;
+    if(!ok){kick.busy=false;kick.msg=r.status===403||r.status===404?'Para atualizar pelo painel, o token do GitHub precisa da permissão Actions = Read and write (Configurações).':'Não consegui acionar o robô agora (HTTP '+r.status+').';if(manual)toast(kick.msg,'err');renderLive();return}
+  }catch(e){kick.busy=false;kick.msg='Sem conexão com o GitHub.';renderLive();return}
+  const before=entryAt(state.entries[todayStr()])||'';
+  kick.msg='Robô rodando — os números aparecem em ~1 minuto…';renderLive();
+  for(let i=0;i<10;i++){await new Promise(r=>setTimeout(r,20000));await loadRemote();const now=entryAt(state.entries[todayStr()])||'';if(now&&now!==before)break}
+  kick.busy=false;kick.msg='';renderAll();
+}
+function maybeAutoKick(){const at=entryAt(state.entries[todayStr()]);if(!at||Date.now()-new Date(at)>10*60000)dispatchSync(false)}
 function initSync(){
   const t=getToken();
   if(t)checkToken(t).then(ok=>{if(ok===false){sync.editor=false;toast('O token salvo neste navegador não tem mais acesso. Reconecte em Configurações.','err')}else sync.editor=true;renderAll()});
-  loadRemote(true);
+  loadRemote(true).then(()=>{if(isEditor())setTimeout(maybeAutoKick,1500)});
+  setInterval(()=>{if(isEditor()&&document.visibilityState==='visible')maybeAutoKick()},5*60000);
 }
 
 /* ================= render all ================= */
