@@ -494,7 +494,6 @@ body:not(.viewer) .view-only{display:none!important}
   <section class="view on" id="v-overview">
     <div id="emptyState"></div>
     <div id="overviewBody">
-      <div id="liveBox"></div>
       <div class="kpis" id="kpis"></div>
 
       <div class="grid g-21">
@@ -1898,18 +1897,19 @@ function renderShare(){
 /* ---- disparar o robô (MGID + Ratoeira) a partir do painel ---- */
 const LS_KICK='painel-latam-kick';
 const kick={busy:false,msg:''};
+function kickUi(){if(kick.busy)setSync('busy',kick.msg.startsWith('Robô')?'Buscando dados novos…':'Atualizando…');else if(kick.msg)setSync('err',kick.msg.length>48?'Não consegui atualizar — veja Configurações':kick.msg);renderLive()}
 async function dispatchSync(manual){
   if(!isEditor()||kick.busy)return;
   if(!manual){let last=0;try{last=+localStorage.getItem(LS_KICK)||0}catch(e){}if(Date.now()-last<8*60000)return}
   try{localStorage.setItem(LS_KICK,String(Date.now()))}catch(e){}
-  kick.busy=true;kick.msg='Pedindo dados novos à MGID e à Ratoeira…';renderLive();
+  kick.busy=true;kick.msg='Pedindo dados novos à MGID e à Ratoeira…';kickUi();
   let ok=false;
   try{const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/actions/workflows/ratoeira.yml/dispatches`,{method:'POST',headers:ghHeaders(true),body:JSON.stringify({ref:'main',inputs:{days:'1'}})});
     ok=r.status===204;
-    if(!ok){kick.busy=false;kick.msg=r.status===403||r.status===404?'Para atualizar pelo painel, o token do GitHub precisa da permissão Actions = Read and write (Configurações).':'Não consegui acionar o robô agora (HTTP '+r.status+').';if(manual)toast(kick.msg,'err');renderLive();return}
-  }catch(e){kick.busy=false;kick.msg='Sem conexão com o GitHub.';renderLive();return}
+    if(!ok){kick.busy=false;kick.msg=r.status===403||r.status===404?'Para atualizar pelo painel, o token do GitHub precisa da permissão Actions = Read and write (Configurações).':'Não consegui acionar o robô agora (HTTP '+r.status+').';if(manual)toast(kick.msg,'err');kickUi();return}
+  }catch(e){kick.busy=false;kick.msg='Sem conexão com o GitHub.';kickUi();return}
   const before=entryAt(state.entries[todayStr()])||'';
-  kick.msg='Robô rodando — os números aparecem em ~1 minuto…';renderLive();
+  kick.msg='Robô rodando — os números aparecem em ~1 minuto…';kickUi();
   for(let i=0;i<10;i++){await new Promise(r=>setTimeout(r,20000));await loadRemote();const now=entryAt(state.entries[todayStr()])||'';if(now&&now!==before)break}
   kick.busy=false;kick.msg='';renderAll();
 }
@@ -1963,7 +1963,7 @@ function bind(){
   $('#btnImport').onclick=()=>$('#importFile').click();$('#importFile').onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value=''};
   $('#btnDemo').onclick=loadDemo;$('#btnWipe').onclick=wipe;
   document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='n'&&isEditor()&&!$('#dlg').open&&!/input|textarea|select/i.test(document.activeElement.tagName)&&!e.metaKey&&!e.ctrlKey){e.preventDefault();openEntry()}});
-  [$('#syncChip'),$('#syncChip2')].forEach(c=>c.onclick=()=>{if(sync.status==='err'&&isEditor()&&hasDirty())pushRemote();else loadRemote()});
+  [$('#syncChip'),$('#syncChip2')].forEach(c=>c.onclick=()=>{if(sync.status==='err'&&isEditor()&&hasDirty())pushRemote();else if(isEditor())dispatchSync(true);else loadRemote()});
   $('#btnCopyLink').onclick=()=>{const u=$('#shareUrl').value;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link copiado')).catch(()=>{$('#shareUrl').select();document.execCommand('copy');toast('Link copiado')})};
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!$('#dlg').open&&!hasDirty()&&(!sync.last||Date.now()-sync.last>60000))loadRemote()});
   setInterval(()=>{if(document.visibilityState==='visible'&&!$('#dlg').open&&!hasDirty()&&!sync.busy)loadRemote()},120000); // atualiza a cada 2 minutos
