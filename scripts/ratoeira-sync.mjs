@@ -12,7 +12,8 @@
 const MCP_URL = process.env.RATOEIRA_MCP_URL;
 const GH_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = process.env.GITHUB_REPOSITORY;
-const DAYS = Math.max(1, Math.min(10, Number(process.env.DAYS || 3)));
+const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias anteriores a hoje
+const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const PLATFORM = process.env.PLATFORM || 'MG';
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
@@ -117,14 +118,14 @@ async function usdBrl(day) {
 /* ---------- data.json via API do GitHub ---------- */
 const ghHeaders = { Authorization: `Bearer ${GH_TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' };
 async function getData() {
-  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=main&t=${Date.now()}`, { headers: ghHeaders });
+  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=${BRANCH}&t=${Date.now()}`, { headers: ghHeaders });
   if (r.status === 404) return { data: { v: 3, settings: {}, entries: {}, demo: false }, sha: null };
   if (!r.ok) throw new Error('GitHub GET data.json: HTTP ' + r.status);
   const j = await r.json();
   return { data: JSON.parse(Buffer.from(j.content, 'base64').toString('utf8')), sha: j.sha };
 }
 async function putData(data, sha, message) {
-  const body = { message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: 'main' };
+  const body = { message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: BRANCH };
   if (sha) body.sha = sha;
   const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify(body) });
   return r.status;
@@ -164,7 +165,7 @@ function aggregate(sales, days) {
 
 /* ---------- principal ---------- */
 const today = ymd(localNow());
-const days = []; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i)); // nunca o dia de hoje (ainda sem investimento)
+const days = [today]; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i)); // hoje (parcial, ao vivo) + dias anteriores
 const from = addDays(days[days.length - 1], -1), to = today; // janela folgada; o dia certo vem do horário de cada venda
 console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
 

@@ -356,6 +356,11 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:30px 0 0}
 .sync.err{color:var(--loss);border-color:color-mix(in srgb,var(--loss) 40%,transparent)}
 .sync.err i{background:var(--loss)}
 @keyframes pulse{50%{opacity:.3}}
+.g-live{grid-template-columns:minmax(300px,1fr) minmax(0,1.7fr)}
+.tbl.live-t{min-width:0;font-size:13.5px}.tbl.live-t td,.tbl.live-t th{padding:9px 8px}.tbl.live-t td:first-child{white-space:normal}
+@media (max-width:1080px){.g-live{grid-template-columns:1fr}}
+.live-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--profit);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 0 color-mix(in srgb,var(--profit) 60%,transparent);animation:ping 1.8s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--profit) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
 body.viewer .edit-only{display:none!important}
 body:not(.viewer) .view-only{display:none!important}
 .sub-t{font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
@@ -466,7 +471,7 @@ body:not(.viewer) .view-only{display:none!important}
     <div><h2 id="greet">Bom dia</h2><p id="greetSub"></p></div>
     <div class="filters">
       <div class="seg" id="rangeSeg">
-        <button data-r="7d">7d</button><button data-r="14d">14d</button><button data-r="30d" class="on">30d</button><button data-r="month">Mês</button><button data-r="90d">90d</button><button data-r="all">Tudo</button><button data-r="custom">Personalizado</button>
+        <button data-r="today">Hoje</button><button data-r="yesterday">Ontem</button><button data-r="7d">7d</button><button data-r="14d">14d</button><button data-r="30d" class="on">30d</button><button data-r="month">Mês</button><button data-r="90d">90d</button><button data-r="all">Tudo</button><button data-r="custom">Personalizado</button>
       </div>
       <div class="custom-range" id="customRange"><input type="date" id="fFrom"><span class="muted">→</span><input type="date" id="fTo"></div>
       <select class="select" id="platformFilter" aria-label="Filtrar por plataforma"></select>
@@ -489,6 +494,7 @@ body:not(.viewer) .view-only{display:none!important}
   <section class="view on" id="v-overview">
     <div id="emptyState"></div>
     <div id="overviewBody">
+      <div id="liveBox"></div>
       <div class="kpis" id="kpis"></div>
 
       <div class="grid g-21">
@@ -947,6 +953,8 @@ function rangeDates(){
   if(keys.length&&keys[keys.length-1]>end)end=keys[keys.length-1];
   let start;const back=n=>addDays(end,-(n-1));
   switch(ui.range){
+    case'today':start=end=today;break;
+    case'yesterday':start=end=addDays(today,-1);break;
     case'7d':start=back(7);break;case'14d':start=back(14);break;case'90d':start=back(90);break;
     case'month':start=end.slice(0,8)+'01';break;
     case'all':start=keys[0]||back(30);break;
@@ -1145,6 +1153,39 @@ function renderHeatmap(dates){
     <div class="heat-cols"><div class="heat-months" style="position:relative">${months}</div><div class="heat">${cells}</div></div></div>
     <div class="heat-legend"><span>Prejuízo</span><span class="cell" style="background:${hexA(c.loss,1)}"></span><span class="cell" style="background:${hexA(c.loss,.4)}"></span><span class="cell missing"></span><span class="cell" style="background:${hexA(c.profit,.4)}"></span><span class="cell" style="background:${hexA(c.profit,1)}"></span><span>Lucro</span><span style="margin-left:10px" class="faint">tracejado = não lançado</span></div>`;
   $$('#heatmap .heat .cell[data-d]').forEach(el=>{if(!el.classList.contains('future')&&isEditor())el.onclick=()=>openEntry(el.dataset.d)});
+}
+
+/* ================= Hoje × Ontem (ao vivo) ================= */
+function entryAt(e){const xs=[e&&e.rx&&e.rx.at,e&&e.mg&&e.mg.at].filter(Boolean).sort();return xs.length?xs[xs.length-1]:null}
+const agoTxt=s=>{if(!s)return'';const m=Math.round((Date.now()-new Date(s))/60000);return m<1?'agora mesmo':m<60?`há ${m} min`:`às ${fmtAt(s).split(' às ')[1]||''}`};
+function renderLive(){
+  const box=$('#liveBox');if(!box)return;
+  const t0=todayStr(),y0=addDays(t0,-1),eT=state.entries[t0],eY=state.entries[y0];
+  if(!eT&&!eY){box.innerHTML='';return}
+  const f=F(),T=eT?tot(eT,f):null,Y=eY?tot(eY,f):null,rT=T&&ratios(T),rY=Y&&ratios(Y);
+  const at=entryAt(eT)||entryAt(eY);
+  const cell=(v,cls)=>`<td class="r num ${cls||''}">${v}</td>`;
+  const rows=[
+    ['Investimento',x=>money(x.spend)],
+    ['Faturamento',x=>money(x.rev)],
+    ['Lucro',x=>money(x.profit),x=>x.profit>=0?'pos':'neg'],
+    ['ROAS',(x,r)=>xf(r.roas),(x,r)=>r.roas==null?'':r.roas>=1?'pos':'neg'],
+    ['Vendas',x=>intf(x.sales)+(x.ups?` <span class="faint">+${intf(x.ups)} ups</span>`:'')],
+    ['CPA',(x,r)=>r.cpa==null?'—':money(r.cpa)],
+    ...(fOn('clicks')?[['Cliques',x=>intS(x.clicks)],['CPC',(x,r)=>moneyP(r.cpc)]]:[]),
+    ...(fOn('ic')?[['Initiate checkout',x=>intf(x.ic)]]:[])
+  ];
+  const camps=eT?adStats([t0]).filter(a=>a.spend>0||a.sales>0).sort((a,b)=>b.spend-a.spend):[];
+  box.innerHTML=`<div class="grid g-live" style="margin-bottom:14px">
+    <div class="card"><div class="card-h"><div><h3><span class="live-dot"></span>Hoje × Ontem</h3><div class="sub">${at?`Atualizado ${agoTxt(at)} · `:''}hoje é parcial (até agora)</div></div></div>
+      <table class="tbl live-t"><thead><tr><th></th><th class="r">Hoje</th><th class="r">Ontem</th></tr></thead><tbody>
+      ${rows.map(([l,fn,cl])=>`<tr><td class="muted" style="font-weight:700">${l}</td>${T?cell(fn(T,rT),cl?cl(T,rT):''):cell('—')}${Y?cell(fn(Y,rY),cl?cl(Y,rY):''):cell('—')}</tr>`).join('')}
+      </tbody></table></div>
+    <div class="card"><div class="card-h"><div><h3>Campanhas hoje</h3><div class="sub">Ordenadas por investimento · vendas da Ratoeira, gasto da MGID</div></div></div>
+      ${camps.length?`<div class="tbl-wrap"><table class="tbl compact" style="min-width:620px"><thead><tr><th>Campanha</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">Checkouts</th><th class="r">Vendas</th><th class="r">CPA</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead><tbody>
+      ${camps.map(a=>`<tr><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b></td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${a.ic?intf(a.ic):'—'}</td><td class="r num">${a.est?'≈':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}
+      </tbody></table></div>`:`<div class="muted" style="font-size:13.5px">Ainda sem dados de campanhas hoje. O robô atualiza a cada ~5 minutos.</div>`}
+    </div></div>`;
 }
 
 /* ================= charts ================= */
@@ -1758,7 +1799,7 @@ function wipe(){if(!confirm('Apagar TODOS os lançamentos? Isso também apaga do
 
 /* ================= sincronização com o GitHub ================= */
 const LS_TOKEN='painel-latam-gh-token',LS_PEND='painel-latam-pending';
-const GH=(()=>{let owner='rochaepaminondasp-coder',repo='painel-latam';const h=location.hostname;if(h.endsWith('.github.io')){owner=h.split('.')[0];const seg=location.pathname.split('/').filter(Boolean)[0];if(seg&&!seg.includes('.'))repo=seg}return{owner,repo,path:'data.json',branch:'main'}})();
+const GH=(()=>{let owner='rochaepaminondasp-coder',repo='painel-latam';const h=location.hostname;if(h.endsWith('.github.io')){owner=h.split('.')[0];const seg=location.pathname.split('/').filter(Boolean)[0];if(seg&&!seg.includes('.'))repo=seg}return{owner,repo,path:'data.json',branch:'dados'}})();
 const sync={sha:null,status:'idle',text:'',last:null,editor:null,busy:false,timer:null,rev:0,dirty:{all:false,settings:false,dates:new Set(),del:new Set()},localOnly:null,loaded:false};
 function getToken(){try{return localStorage.getItem(LS_TOKEN)}catch(e){return null}}
 function setToken(t){try{t?localStorage.setItem(LS_TOKEN,t):localStorage.removeItem(LS_TOKEN)}catch(e){}}
@@ -1777,7 +1818,7 @@ async function fetchRemote(){
   let r=null;try{r=await fetch(apiUrl()+'?ref='+GH.branch+'&t='+Date.now(),{headers:ghHeaders(),cache:'no-store'})}catch(e){}
   if(r&&r.ok){const j=await r.json();return{data:j.content?JSON.parse(b64dec(j.content)):null,sha:j.sha}}
   if(r&&r.status===404)return{data:null,sha:null};
-  try{const p=await fetch('data.json?t='+Date.now(),{cache:'no-store'});if(p.ok)return{data:await p.json(),sha:undefined}}catch(e){}
+  try{const p=await fetch(`https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${GH.path}?t=${Date.now()}`,{cache:'no-store'});if(p.ok)return{data:await p.json(),sha:undefined}}catch(e){}
   throw new Error(r?'HTTP '+r.status:'offline');
 }
 async function loadRemote(initial){
@@ -1864,7 +1905,7 @@ function renderAll(){
   if(!state.demo)applyRxAll();
   applyMode();renderHeader();renderBanner();renderEmpty();renderSettings();renderShare();
   const dates=rangeDates(),has=sortedKeys().length>0;
-  if(has&&ui.tab==='overview'){renderKPIs(dates);renderFunnel(dates);renderTiles(dates);renderInsights(dates);renderHeatmap(dates)}
+  if(has&&ui.tab==='overview'){renderLive();renderKPIs(dates);renderFunnel(dates);renderTiles(dates);renderInsights(dates);renderHeatmap(dates)}
   if(ui.tab==='platforms')renderPlatforms(dates);
   if(ui.tab==='ads')renderAds(dates);
   if(ui.tab==='countries')renderCountries(dates);
@@ -1904,7 +1945,7 @@ function bind(){
   [$('#syncChip'),$('#syncChip2')].forEach(c=>c.onclick=()=>{if(sync.status==='err'&&isEditor()&&hasDirty())pushRemote();else loadRemote()});
   $('#btnCopyLink').onclick=()=>{const u=$('#shareUrl').value;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link copiado')).catch(()=>{$('#shareUrl').select();document.execCommand('copy');toast('Link copiado')})};
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!$('#dlg').open&&!hasDirty()&&(!sync.last||Date.now()-sync.last>60000))loadRemote()});
-  setInterval(()=>{if(document.visibilityState==='visible'&&!$('#dlg').open&&!hasDirty()&&!sync.busy)loadRemote()},300000);
+  setInterval(()=>{if(document.visibilityState==='visible'&&!$('#dlg').open&&!hasDirty()&&!sync.busy)loadRemote()},120000); // atualiza a cada 2 minutos
   window.addEventListener('beforeunload',e=>{if(isEditor()&&hasDirty()){e.preventDefault();e.returnValue=''}});
   bindSettings();
 }

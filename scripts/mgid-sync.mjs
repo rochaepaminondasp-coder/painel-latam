@@ -12,7 +12,8 @@ const TOKEN = String(process.env.MGID_TOKEN || '').trim().replace(/^Bearer\s+/i,
 const CLIENT = process.env.MGID_CLIENT_ID || '996870';
 const GH_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = process.env.GITHUB_REPOSITORY;
-const DAYS = Math.max(1, Math.min(10, Number(process.env.DAYS || 3)));
+const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias anteriores a hoje
+const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const API = (process.env.MGID_API || 'https://api.mgid.com/v2').replace(/\/$/, '');
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const P = 'MG';
@@ -24,7 +25,7 @@ const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return ymd(d); };
 const today = ymd(new Date(Date.now() - 3 * 3600e3)); // horário de Brasília
-const days = []; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i));
+const days = [today]; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -i)); // hoje (parcial, ao vivo) + dias anteriores
 const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
 /* ---------- API v2 da MGID ---------- */
@@ -62,13 +63,13 @@ function countryOf(name) {
 /* ---------- data.json via API do GitHub ---------- */
 const ghHeaders = { Authorization: `Bearer ${GH_TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' };
 async function getData() {
-  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=main&t=${Date.now()}`, { headers: ghHeaders });
+  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=${BRANCH}&t=${Date.now()}`, { headers: ghHeaders });
   if (!r.ok) throw new Error('GitHub GET data.json: HTTP ' + r.status);
   const j = await r.json();
   return { data: JSON.parse(Buffer.from(j.content, 'base64').toString('utf8')), sha: j.sha };
 }
 async function putData(data, sha, message) {
-  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify({ message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: 'main', sha }) });
+  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify({ message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: BRANCH, sha }) });
   return r.status;
 }
 
