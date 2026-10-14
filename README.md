@@ -1,35 +1,43 @@
 # Painel LATAM 📊
 
-Painel diário de resultados para infoproduto rodando **native ads** (Taboola, MGID, Outbrain, Revcontent…) em vários países da América Latina.
+Painel diário de resultados para infoproduto rodando **native ads** (MGID, Taboola, Outbrain…) em vários países da América Latina.
 
-Todo dia você lança o resultado de ontem **por plataforma e por país**: investimento, impressões, cliques, cliques no link, checkouts iniciados, vendas e faturamento. O painel monta o funil completo e calcula lucro, ROAS, CPA, CPC, CTR, CPM, EPC e conversões. Ele também mostra qual plataforma, país e anúncio estão dando mais lucro.
+🔗 **Link do painel:** https://rochaepaminondasp-coder.github.io/painel-latam/
 
-É **um único arquivo** (`index.html`), sem servidor e sem banco de dados.
+**Quem abre o link vê os mesmos dados.** Os lançamentos ficam salvos no arquivo `data.json` deste repositório. Só quem conectar o GitHub (o dono) consegue lançar e editar; o resto só visualiza.
 
-🔗 **Painel no ar:** https://rochaepaminondasp-coder.github.io/painel-latam/
+---
+
+## Primeira vez (só o dono, uma vez por navegador)
+
+1. Abra o link → **Configurações → Compartilhar e editar**.
+2. Crie um token em https://github.com/settings/personal-access-tokens/new:
+   - **Token name:** `painel-latam`
+   - **Expiration:** ex.: 1 ano
+   - **Repository access:** *Only select repositories* → `painel-latam`
+   - **Permissions → Repository permissions → Contents:** *Read and write*
+3. Gere o token, cole no painel e clique em **Conectar**.
+
+O token fica salvo só naquele navegador. Para lançar de outro computador ou do celular, repita o passo no outro aparelho.
 
 ---
 
 ## Rotina diária
 
-1. Abra o painel. Se o dia de ontem ainda não foi lançado, aparece um aviso com o botão **Lançar dd/mm**.
-2. **Bloco 1 — Resultados por plataforma e país:** escolha a aba da plataforma (Taboola, MGID…). Preencha cada país; embaixo de cada linha já aparecem CPC, CTR, EPC, CPA e ROAS. Troque de aba e repita para a outra plataforma.
-3. **Bloco 2 — Anúncios do dia (opcional):** nome ou ID do anúncio, plataforma, país, investimento, cliques, vendas e faturamento.
-   - **Repetir anúncios do último dia** já traz os mesmos criativos; é só preencher os números.
-   - Os anúncios são um detalhamento: servem para comparar criativos e **não somam** nos totais do dia.
-4. **Bloco 3:** reembolsos, outros custos e observações.
-5. **Salvar dia**.
-
-Atalho: tecla **N** abre um novo lançamento.
-
-### Preencher a partir de um print
-
-Na aba da plataforma, arraste, cole (**Ctrl+V**) ou clique na área de print:
-
-- **Relatório do native**: print do Taboola/MGID **quebrado por país**. Preenche investimento, impressões e cliques.
-- **Relatório de vendas**: print da plataforma de vendas por país. Preenche vendas e faturamento.
-
-A leitura roda no seu navegador (nada é enviado para servidor). **Sempre confira** os números destacados antes de salvar.
+1. **Lançar dia** (ou tecla **N**).
+2. **Bloco 1 — Tráfego:** arraste o **CSV exportado da MGID** na área de importação.
+   - O painel reconhece as colunas e puxa **investimento, impressões, cliques, Page View e Initiate Checkout**.
+   - **Receita e ROAS da planilha nunca são importados.** O faturamento vem das vendas que você lança e o ROAS é calculado pelo painel.
+   - A coluna de **Compras (pixel)** também fica de fora por padrão (você lança as vendas), mas dá para ligar.
+   - **Campanhas → país:** se a planilha não tiver coluna de país, o painel detecta pelo nome da campanha:
+     - `AR - …` ou `[CL] …` vira o país;
+     - campanha sem país no nome vira **🌎 Vários países**;
+     - você pode corrigir, e o painel lembra nos próximos dias.
+   - **Moeda:** se a MGID estiver em dólar, escolha USD e informe a cotação. O painel converte.
+   - As campanhas também entram no ranking da aba **Anúncios**.
+   - Também dá para usar **print** (Ctrl+V) ou **digitar**.
+3. **Bloco 2 — Vendas:** vendas e faturamento de **front** e de **upsell** por país.
+4. **Salvar dia** → em segundos aparece para todo mundo no link.
 
 ---
 
@@ -37,55 +45,29 @@ A leitura roda no seu navegador (nada é enviado para servidor). **Sempre confir
 
 | Aba | Conteúdo |
 |---|---|
-| **Visão geral** | KPIs financeiros, **funil do native** (impressões → cliques → cliques no link → checkouts → vendas, com a taxa entre etapas e o custo de cada uma), métricas de tráfego (CTR, CPC, EPC, CPM, CTR da presell, taxa de checkout, conversão, custo por checkout), EPC × CPC, taxas do funil, lucro diário e acumulado, calendário de lucro/prejuízo e vendas por país |
-| **Plataformas** | Card de cada plataforma com selo Escalar/Lucrativo/Revisar, **matriz Plataforma × País** (ROAS, lucro, CPA, EPC, CPC ou CTR), lucro diário por plataforma |
-| **Anúncios** | 🏆 Melhor anúncio do período, alerta de anúncios queimando verba, ranking completo e ROAS por anúncio |
-| **Países** | Sugestão de distribuição de verba, ranking de países e tendência |
-| **Histórico** | Todos os dias, com detalhe por plataforma, país e anúncio; exportar CSV |
-
-Filtros no topo: período (7d, 14d, 30d, mês, 90d, tudo, personalizado), **plataforma** e **país**.
-
----
+| **Visão geral** | Lucro, faturamento (front + upsell), investimento, ROAS, CPA, ticket; **funil** impressões → cliques → page view → initiate checkout → vendas, com taxas e custo de cada etapa; CTR, CPC, CPM, EPC, taxa de chegada, custo por page view, custo por checkout, taxa de upsell; gráficos e calendário de lucro/prejuízo |
+| **Plataformas** | MGID × Taboola e matriz **Plataforma × País** |
+| **Anúncios** | Melhor campanha/anúncio, alertas e ranking |
+| **Países** | Ranking e sugestão de distribuição de verba ("Vários países" fica de fora da sugestão) |
+| **Histórico** | Todos os dias, com detalhe e exportação CSV |
 
 ## Fórmulas
 
 ```
-Lucro = Faturamento − Investimento − (Faturamento × Taxa%) − Reembolsos − Outros custos
-ROAS  = Faturamento ÷ Investimento        CPA  = Investimento ÷ Vendas
-CTR   = Cliques ÷ Impressões              CPC  = Investimento ÷ Cliques
-CPM   = Investimento ÷ Impressões × 1000  EPC  = Faturamento ÷ Cliques
-CTR da presell     = Cliques no link ÷ Cliques
-Taxa de checkout   = Checkouts iniciados ÷ Cliques no link
-Conversão checkout = Vendas ÷ Checkouts iniciados
+Faturamento total = faturamento front + faturamento upsell
+Lucro = Faturamento total − Investimento − Taxa% − Reembolsos − Outros custos
+ROAS = Faturamento total ÷ Investimento     CPA = Investimento ÷ Vendas front
+CTR = Cliques ÷ Impressões                  CPC = Investimento ÷ Cliques
+EPC = Faturamento total ÷ Cliques           Taxa de chegada = Page views ÷ Cliques
+Page view → checkout = Initiate checkout ÷ Page views
+Conversão do checkout = Vendas front ÷ Initiate checkout
+Taxa de upsell = Vendas upsell ÷ Vendas front
 ```
 
-**EPC acima do CPC = cada clique está dando lucro.**
-
 ---
 
-## Configurações
+## Privacidade
 
-- **Moeda**: R$, US$ ou €. Lance os valores já convertidos.
-- **Taxa da plataforma de vendas (%)**: descontada do faturamento.
-- **Ticket padrão**: faturamento automático = vendas × ticket.
-- **Meta de lucro diário**.
-- **Métricas do funil**: ligue ou desligue impressões, cliques, cliques no link e checkouts.
-- **Plataformas** e **países** que aparecem no lançamento.
+O repositório é **público** (o GitHub Pages gratuito exige isso). Ou seja, os números do `data.json` podem ser vistos por qualquer pessoa que encontre o repositório, não só por quem tem o link. Se um dia quiser fechar, dá para tornar o repositório privado com o plano GitHub Pro ou migrar os dados para outro serviço.
 
----
-
-## ⚠️ Onde ficam os dados
-
-Os lançamentos ficam salvos **no navegador**, não no GitHub.
-
-- **Exporte um backup** com frequência (ícone ⬇ no topo).
-- Para usar em outro computador ou no celular, use **Importar backup** lá.
-- Lançamentos feitos na versão anterior do painel continuam valendo. Eles aparecem com a plataforma "Não informada".
-
-Para testar: *Configurações → Carregar dados de exemplo* e depois **Limpar exemplo**.
-
----
-
-## Como atualizar no GitHub Pages
-
-Substitua o `index.html` no repositório (Add file → Upload files) e faça o commit. Em 1–2 minutos a nova versão está no ar.
+O **modo exemplo** (Configurações → Carregar dados de exemplo) fica só no seu navegador e nunca vai para o link.

@@ -1,0 +1,19 @@
+{
+  "v": 3,
+  "settings": {
+    "project": "Infoproduto LATAM",
+    "currency": "BRL",
+    "feePct": 0,
+    "ticket": 0,
+    "goal": 0,
+    "countries": ["AR", "CL", "CO", "XX"],
+    "platforms": ["MG", "TB"],
+    "fields": {"imp": true, "clicks": true, "pv": true, "link": false, "ic": true, "ups": true},
+    "importMap": {},
+    "campMap": {},
+    "sheetCur": "",
+    "fx": 0
+  },
+  "entries": {},
+  "demo": false
+}
