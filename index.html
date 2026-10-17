@@ -359,6 +359,7 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:30px 0 0}
 .g-live{grid-template-columns:minmax(300px,1fr) minmax(0,1.7fr)}
 .tbl.live-t{min-width:0;font-size:13.5px}.tbl.live-t td,.tbl.live-t th{padding:9px 8px}.tbl.live-t td:first-child{white-space:normal}
 @media (max-width:1080px){.g-live{grid-template-columns:1fr}}
+.tbl.cdet{min-width:0;font-size:13px;background:var(--card);border-radius:10px}.tbl.cdet td,.tbl.cdet th{padding:7px 9px}
 .via{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:10px;display:grid;gap:5px}
 .via-t{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .via-r{display:grid;gap:1px;font-size:12.5px;min-width:0;padding:4px 0;border-top:1px solid var(--line)}
@@ -899,11 +900,11 @@ function applyRx(e,s){
   e.rxRef=r2(ref);return e;
 }
 function viaByCountry(dates){
-  const out={},fee0=fee();
-  const add=(cc,cid,name,multi,spend,sales,ups,rev)=>{const o=((out[cc]=out[cc]||{})[cid]=out[cc][cid]||{name,multi,spend:0,sales:0,ups:0,rev:0});o.spend+=spend;o.sales+=sales;o.ups+=ups;o.rev+=rev};
+  const out={},fee0=fee();let P0='';
+  const add=(cc,cid,name,multi,spend,sales,ups,rev)=>{const o=((out[cc]=out[cc]||{})[cid]=out[cc][cid]||{name,multi,p:P0,spend:0,sales:0,ups:0,rev:0});o.spend+=spend;o.sales+=sales;o.ups+=ups;o.rev+=rev};
   for(const d of dates){const e=state.entries[d];if(!e)continue;const al=allocAds(e),fx=rxFx(e);
     (e.ads||[]).forEach((a,i)=>{
-      if(ui.platform!=='ALL'&&a.p!==ui.platform)return;
+      if(ui.platform!=='ALL'&&a.p!==ui.platform)return;P0=a.p;
       const cid=String(a.cid||a.name),rc=e.rx&&e.rx.camps&&a.cid?e.rx.camps[String(a.cid)]:null;
       if(a.cc){add(a.cc,cid,a.name,false,num(a.spend),al[i].sales,rc?num(rc.ups):0,al[i].rev);return}
       const g=(e.geo&&a.cid&&e.geo[String(a.cid)])||{},bc=(rc&&rc.byCc)||(rc&&rc.cc?{[rc.cc]:rc}:{});
@@ -913,6 +914,14 @@ function viaByCountry(dates){
       if(!Object.keys(g).length&&num(a.spend))add('XX',cid,a.name,true,num(a.spend),0,0,0);
     })}
   for(const m of Object.values(out))for(const o of Object.values(m))o.profit=o.rev-o.spend-o.rev*fee0;
+  return out;
+}
+function countriesByCampaign(dates){
+  const out={};
+  for(const[cc,m]of Object.entries(viaByCountry(dates)))for(const o of Object.values(m)){
+    const k=o.p+'|'+norm(o.name||'').trim();(out[k]=out[k]||[]).push({cc,...o});
+  }
+  for(const l of Object.values(out))l.sort((a,b)=>(b.sales-a.sales)||(b.spend-a.spend));
   return out;
 }
 function applyRxAll(){for(const e of Object.values(state.entries))applyRx(e)}
@@ -1336,8 +1345,15 @@ function renderMatrix(dates){
 
 /* ================= ads tab ================= */
 const ADS_ILLO=`<svg viewBox="0 0 160 110" fill="none"><rect x="10" y="14" width="96" height="70" rx="12" fill="var(--card2)" stroke="var(--line2)" stroke-width="2"/><rect x="20" y="24" width="76" height="30" rx="6" fill="var(--rev)" opacity=".5"/><rect x="20" y="60" width="56" height="7" rx="3.5" fill="var(--line2)"/><rect x="20" y="71" width="38" height="7" rx="3.5" fill="var(--line2)"/><g transform="translate(118 62)"><circle r="26" fill="var(--accent)"/><path d="M-9 -10h18v6a9 9 0 0 1-18 0zM-4 8h8M0 4v4" stroke="var(--accent-ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
+function campDetail(cl){
+  if(!cl.length)return`<tr class="detail"><td colspan="14" class="muted">Sem detalhe por país para esta campanha no período.</td></tr>`;
+  const f=fee();
+  return`<tr class="detail"><td colspan="14"><div class="sub-t" style="margin:2px 0 8px">Por país</div><table class="tbl cdet"><thead><tr><th>País</th><th class="r">Investimento</th><th class="r">% do gasto</th><th class="r">Vendas</th><th class="r">Faturamento</th><th class="r">CPA</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead><tbody>
+  ${(()=>{const tot=cl.reduce((s,x)=>s+x.spend,0);return cl.map(x=>{const roas=x.spend?x.rev/x.spend:null,profit=x.rev-x.spend-x.rev*f;return`<tr><td>${flag(x.cc)} ${esc(cname(x.cc))}</td><td class="r num">${money(x.spend)}</td><td class="r num">${tot?pctf(x.spend/tot,0):'—'}</td><td class="r num">${intf(x.sales)}${x.ups?` <span class="faint">+${intf(x.ups)} ups</span>`:''}</td><td class="r num">${money(x.rev)}</td><td class="r num">${x.sales?money(x.spend/x.sales):'—'}</td><td class="r num ${roas==null?'':roas>=1?'pos':'neg'}">${xf(roas)}</td><td class="r num ${profit>=0?'pos':'neg'}">${money(profit)}</td></tr>`}).join('')})()}
+  </tbody></table></td></tr>`;
+}
 function renderAds(dates){
-  const ads=adStats(dates);
+  const ads=adStats(dates),byCamp=countriesByCampaign(dates);
   if(!ads.length){$('#adsBody').innerHTML=`<div class="card empty-sm">${ADS_ILLO}<b>Nenhuma campanha no período</b>Ao importar a planilha da MGID, as campanhas entram aqui automaticamente. Você também pode lançar campanhas à mão no bloco <b style="display:inline">Campanhas do dia</b>.<div style="margin-top:16px" class="edit-only"><button class="btn primary" id="adsNew">Lançar campanhas</button></div></div>`;$('#adsNew').onclick=()=>openEntry(undefined,true);return}
   const best=ads.find(a=>a.profit>0)||ads[0];
   const totSpend=ads.reduce((s,a)=>s+a.spend,0),totSales=ads.reduce((s,a)=>s+a.sales,0),avgCpa=totSales?totSpend/totSales:null;
@@ -1356,10 +1372,11 @@ function renderAds(dates){
         ${losing.slice(0,Math.max(0,3-bleed.length)).map(a=>`<div class="alert"><span class="neg">${ICON.down}</span><span><b>${esc(a.name)}</b><br><span class="muted">${esc(pname(a.p))} · ROAS ${xf(a.roas)}</span></span><span class="num neg">${money(a.profit)}</span></div>`).join('')}
         ${!bleed.length&&!losing.length?`<div class="muted" style="font-size:13.5px">Nenhuma campanha no vermelho neste período. 👏</div>`:''}</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de campanhas</h3><div class="sub">Ordenado por lucro${ads.some(a=>a.est)?' · <b>≈</b> = estimado: as vendas e o faturamento do país divididos entre as campanhas dele, proporcional aos initiate checkouts (ou aos cliques, quando não há checkout). Para o número exato, lance as vendas na própria campanha.':''}</div></div></div>
+    <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de campanhas</h3><div class="sub">Clique numa campanha para ver o gasto e as vendas por país · ordenado por lucro${ads.some(a=>a.est)?' · <b>≈</b> = estimado: as vendas e o faturamento do país divididos entre as campanhas dele, proporcional aos initiate checkouts (ou aos cliques, quando não há checkout). Para o número exato, lance as vendas na própria campanha.':''}</div></div></div>
       <div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>#</th><th>Campanha</th><th>Plataforma</th><th class="r">Dias</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">CPC</th><th class="r">Checkouts</th><th class="r">Vendas</th><th class="r">CPA</th><th class="r">Faturamento</th><th class="r">EPC</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead>
-      <tbody>${ads.map((a,i)=>`<tr class="${i===0&&a.profit>0?'top1':''}"><td class="faint num">${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${[...a.ccs].map(cc=>flag(cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?(a.icEst?'<span class="faint">≈</span>':'')+intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>`).join('')}</tbody></table></div></div>
+      <tbody>${ads.map((a,i)=>{const k=a.p+'|'+norm(a.name||'').trim(),cl=(byCamp[k]||[]).filter(x=>x.spend>0.5||x.sales||x.ups),multi=cl.length>1||cl.some(x=>x.multi),open=ui.openCamp===k;return`<tr class="main-row ${i===0&&a.profit>0?'top1':''}" data-k="${esc(k)}" title="Clique para ver os países"><td class="faint num">${open?'▾':'▸'} ${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${multi?`<span class="via-tag">${cl.length} países</span>`:cl.map(x=>flag(x.cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?(a.icEst?'<span class="faint">≈</span>':'')+intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>${open?campDetail(cl):''}`}).join('')}</tbody></table></div></div>
     <div class="card"><div class="card-h"><div><h3>ROAS por campanha</h3><div class="sub">Top 10 · linha de corte em 1,0</div></div></div><div class="chart-box" style="height:${Math.max(200,Math.min(10,ads.length)*40+40)}px"><canvas id="chAds"></canvas></div></div>`;
+  $$('#adsBody tr.main-row').forEach(tr=>tr.onclick=()=>{ui.openCamp=ui.openCamp===tr.dataset.k?null:tr.dataset.k;renderAds(dates);renderAdsChart(dates,tc())});
 }
 
 /* ================= countries tab ================= */
