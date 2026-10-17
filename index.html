@@ -359,6 +359,13 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:30px 0 0}
 .g-live{grid-template-columns:minmax(300px,1fr) minmax(0,1.7fr)}
 .tbl.live-t{min-width:0;font-size:13.5px}.tbl.live-t td,.tbl.live-t th{padding:9px 8px}.tbl.live-t td:first-child{white-space:normal}
 @media (max-width:1080px){.g-live{grid-template-columns:1fr}}
+.via{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:10px;display:grid;gap:5px}
+.via-t{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.via-r{display:grid;gap:1px;font-size:12.5px;min-width:0;padding:4px 0;border-top:1px solid var(--line)}
+.via-r:first-of-type{border-top:0;padding-top:0}
+.via-n{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.via-v{white-space:nowrap;color:var(--muted);font-size:12px}.via-v b{color:var(--text)}
+.via-tag{display:inline-block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:1px 5px;border-radius:5px;margin-right:5px;background:color-mix(in srgb,var(--rev) 16%,transparent);color:var(--rev);vertical-align:1px}
 .live-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--profit);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 0 color-mix(in srgb,var(--profit) 60%,transparent);animation:ping 1.8s infinite}
 @keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--profit) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
 body.viewer .edit-only{display:none!important}
@@ -734,6 +741,7 @@ body:not(.viewer) .view-only{display:none!important}
 /* ================= constants ================= */
 const LS_KEY='painel-latam-v1', LS_THEME='painel-latam-theme';
 const COUNTRIES={
+  OT:{n:'Outros países',a:[]},
   XX:{n:'Vários países',a:['varios paises','multi pais','todos los paises','todos os paises','all countries','multi geo','multigeo']},
   AR:{n:'Argentina',a:['argentina']},CL:{n:'Chile',a:['chile']},CO:{n:'Colômbia',a:['colombia']},
   MX:{n:'México',a:['mexico']},PE:{n:'Peru',a:['peru']},EC:{n:'Equador',a:['ecuador','equador']},
@@ -877,13 +885,35 @@ function applyRx(e,s){
   let ref=0;const r2=v=>Math.round(v*100)/100;
   for(const[cid,c]of Object.entries(e.rx.camps)){
     const ad=cid?e.ads.find(a=>a.p===P&&String(a.cid||'')===cid):null;
-    const cc=ad?(ad.cc||'XX'):((s.cidMap||{})[cid]||c.cc||'XX');
-    let r=e.rows.find(x=>x.p===P&&x.cc===cc);if(!r){r={p:P,cc,spend:0,imp:0,clicks:0,pv:0,link:0,ic:0,sales:0,rev:0,ups:0,upsRev:0};e.rows.push(r)}
-    r.sales+=num(c.front);r.rev=r2(num(r.rev)+num(c.frontUsd)*fx);r.ups+=num(c.ups);r.upsRev=r2(num(r.upsRev)+num(c.upsUsd)*fx);ref+=num(c.refUsd)*fx;
+    const fixed=ad?(ad.cc||''):(((s.cidMap||{})[cid]&&(s.cidMap||{})[cid]!=='XX')?(s.cidMap||{})[cid]:'');
+    // campanha de um país só: tudo vai para o país da campanha; campanha com vários países: para o país do comprador
+    const parts=fixed?[[fixed,c]]:(c.byCc&&Object.keys(c.byCc).length?Object.entries(c.byCc):[[c.cc||'XX',c]]);
+    for(const[cc,b]of parts){
+      let r=e.rows.find(x=>x.p===P&&x.cc===cc);if(!r){r={p:P,cc,spend:0,imp:0,clicks:0,pv:0,link:0,ic:0,sales:0,rev:0,ups:0,upsRev:0};e.rows.push(r)}
+      r.sales+=num(b.front);r.rev=r2(num(r.rev)+num(b.frontUsd)*fx);r.ups+=num(b.ups);r.upsRev=r2(num(r.upsRev)+num(b.upsUsd)*fx);
+    }
+    ref+=num(c.refUsd)*fx;
     if(ad){ad.sales=num(c.front);ad.rev=r2((num(c.frontUsd)+num(c.upsUsd))*fx);ad.rx=1}
   }
   e.ads.forEach(a=>{if(a.p===P&&a.cid&&!e.rx.camps[String(a.cid)]){a.sales=0;a.rev=0;a.rx=1}});
   e.rxRef=r2(ref);return e;
+}
+function viaByCountry(dates){
+  const out={},fee0=fee();
+  const add=(cc,cid,name,multi,spend,sales,ups,rev)=>{const o=((out[cc]=out[cc]||{})[cid]=out[cc][cid]||{name,multi,spend:0,sales:0,ups:0,rev:0});o.spend+=spend;o.sales+=sales;o.ups+=ups;o.rev+=rev};
+  for(const d of dates){const e=state.entries[d];if(!e)continue;const al=allocAds(e),fx=rxFx(e);
+    (e.ads||[]).forEach((a,i)=>{
+      if(ui.platform!=='ALL'&&a.p!==ui.platform)return;
+      const cid=String(a.cid||a.name),rc=e.rx&&e.rx.camps&&a.cid?e.rx.camps[String(a.cid)]:null;
+      if(a.cc){add(a.cc,cid,a.name,false,num(a.spend),al[i].sales,rc?num(rc.ups):0,al[i].rev);return}
+      const g=(e.geo&&a.cid&&e.geo[String(a.cid)])||{},bc=(rc&&rc.byCc)||(rc&&rc.cc?{[rc.cc]:rc}:{});
+      const ccs=new Set([...Object.keys(g),...Object.keys(bc)]);
+      if(!ccs.size){add('XX',cid,a.name,true,num(a.spend),al[i].sales,0,al[i].rev);return}
+      for(const cc of ccs){const b=bc[cc]||{};add(cc,cid,a.name,true,num((g[cc]||{}).spend),num(b.front),num(b.ups),(num(b.frontUsd)+num(b.upsUsd))*fx)}
+      if(!Object.keys(g).length&&num(a.spend))add('XX',cid,a.name,true,num(a.spend),0,0,0);
+    })}
+  for(const m of Object.values(out))for(const o of Object.values(m))o.profit=o.rev-o.spend-o.rev*fee0;
+  return out;
 }
 function applyRxAll(){for(const e of Object.values(state.entries))applyRx(e)}
 function emptyT(){return{spend:0,imp:0,clicks:0,pv:0,link:0,ic:0,sales:0,rev:0,ups:0,upsRev:0}}
@@ -1333,14 +1363,19 @@ function renderAds(dates){
 }
 
 /* ================= countries tab ================= */
+function viaHtml(m){
+  const list=Object.values(m||{}).filter(x=>x.sales||x.ups||x.spend>0.5).sort((a,b)=>(b.sales-a.sales)||(b.spend-a.spend));
+  if(!list.length)return'';
+  return`<div class="via"><div class="via-t">Vendas por campanha</div>${list.slice(0,4).map(x=>`<div class="via-r"><span class="via-n" title="${esc(x.name)}">${x.multi?'<span class="via-tag">multi-país</span>':''}${esc(x.name)}</span><span class="num via-v">${x.sales?`<b>${intf(x.sales)}</b> venda${x.sales>1?'s':''}`:'0 vendas'}${x.ups?` +${intf(x.ups)} ups`:''}${x.spend>0.5?` · ${moneyS(x.spend)}`:''}</span></div>`).join('')}${list.length>4?`<div class="faint" style="font-size:11.5px">+${list.length-4} campanhas</div>`:''}</div>`;
+}
 function renderCountries(dates){
   const cs=groupBy(dates,r=>r.cc,{p:ui.platform});
   if(!cs.length){$('#ccards').innerHTML=`<div class="card muted">Nenhum dado de país no período.</div>`;$('#allocBox').innerHTML='';return}
-  const best=cs.filter(o=>o.roas!=null).sort((a,b)=>b.roas-a.roas)[0];
+  const best=cs.filter(o=>o.roas!=null).sort((a,b)=>b.roas-a.roas)[0],via=viaByCountry(dates);
   $('#ccards').innerHTML=cs.map((o,i)=>`<div class="card ccard"><span class="rank num">#${i+1}</span>
     <div class="c-h">${flag(o.key,true)}<div><b>${esc(cname(o.key))}</b><div style="margin-top:4px">${statusTag(o,best)}</div></div></div>
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px;flex-wrap:wrap"><span class="num ${o.profit>=0?'pos':'neg'}" style="font-size:24px;font-weight:600">${money(o.profit)}</span><span class="muted" style="font-size:12.5px">lucro após taxas</span></div>
-    ${mstats(o)}</div>`).join('');
+    ${viaHtml(via[o.key])}${mstats(o)}</div>`).join('');
   const pos=cs.filter(o=>o.key!=='XX'&&o.spend>0&&o.profit>0),totP=pos.reduce((a,o)=>a+o.profit,0);
   const neg=cs.filter(o=>o.key!=='XX'&&o.spend>0&&o.profit<0);
   if(!pos.length){$('#allocBox').innerHTML=`<div class="muted">Nenhum país fechou no lucro neste período — vale revisar criativos, presell e oferta antes de redistribuir a verba.</div>`;return}

@@ -33,11 +33,11 @@ const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return N
 // metrics/dimensions separados por vírgula; filtros em colchetes (deepObject); token Bearer.
 const METRICS = ['impressions', 'clicks', 'spent', 'conversionsInterest', 'conversionsDecision', 'conversionsBuy'];
 const money = v => (v && typeof v === 'object') ? num(v.amount) : num(v);
-async function report(from, to) {
+async function report(from, to, dims = 'day,campaignId,campaignName') {
   const all = [], LIM = 500; let currency = null;
   for (let off = 0; off < 20000; off += LIM) {
     const qs = [
-      `metrics=${METRICS.join(',')}`, 'dimensions=day,campaignId,campaignName',
+      `metrics=${METRICS.join(',')}`, `dimensions=${dims}`,
       `filters[dateRange][dateFrom]=${encodeURIComponent(from + 'T00:00:00-03:00')}`,
       `filters[dateRange][dateTo]=${encodeURIComponent(to + 'T23:59:59-03:00')}`,
       `limit=${LIM}`, `offset=${off}`].join('&');
@@ -76,6 +76,29 @@ async function putData(data, sha, message) {
 /* ---------- principal ---------- */
 console.log(`MGID: atualizando ${days.slice().reverse().join(', ')} …`);
 const { rows: rep, currency } = await report(days[days.length - 1], days[0]);
+
+/* ---------- gasto por país (para campanhas com vários países) ---------- */
+// Dicionário da MGID: nome/ID do país -> código ISO (MX, CL, ...)
+const isoOf = {};
+try {
+  const r = await fetch(`${API}/ads/dictionaries/countries`, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' } });
+  if (r.ok) for (const c of (await r.json())?.data || []) { const iso = String(c.iso || '').toUpperCase(); if (!iso) continue; isoOf[String(c.id)] = iso; isoOf[String(c.name || '').toLowerCase()] = iso; isoOf[iso.toLowerCase()] = iso; }
+} catch {}
+const toIso = v => { const s = String(v ?? '').trim(); if (!s) return null; if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase(); return isoOf[s.toLowerCase()] || null; };
+let geoRep = null;
+try {
+  geoRep = (await report(days[days.length - 1], days[0], 'day,campaignId,country')).rows;
+  const unk = new Set(geoRep.filter(r => r.country && !toIso(r.country)).map(r => String(r.country)));
+  console.log(`MGID: ${geoRep.length} linhas (campanha × país × dia)${unk.size ? ` · países sem código: ${[...unk].slice(0, 5).join(', ')}` : ''}`);
+} catch (e) { console.log('MGID: não consegui o gasto por país (' + e.message.slice(0, 160) + ') — campanhas multi-país ficam em "Vários países".'); }
+const geoDay = Object.fromEntries(days.map(d => [d, {}])); // dia -> cid -> país -> métricas
+for (const row of geoRep || []) {
+  const d = String(row.day || '').slice(0, 10), cid = String(row.campaignId ?? ''); if (!geoDay[d] || !cid) continue;
+  const cc = toIso(row.country) || 'OT';
+  const g = ((geoDay[d][cid] = geoDay[d][cid] || {})[cc] = geoDay[d][cid][cc] || { spent: 0, imps: 0, clicks: 0, interest: 0, decision: 0 });
+  g.spent += money(row.spent); g.imps += num(row.impressions); g.clicks += num(row.clicks);
+  g.interest += num(row.conversionsInterest); g.decision += num(row.conversionsDecision);
+}
 console.log(`MGID: ${rep.length} linhas (campanha × dia) · moeda do investimento: ${currency || '—'}`);
 const names = {}, perDay = Object.fromEntries(days.map(d => [d, {}]));
 for (const row of rep) {
@@ -103,23 +126,40 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const e = data.entries[d] || (camps.length ? (data.entries[d] = { rows: [], ads: [], refunds: 0, other: 0, notes: '' }) : null);
     if (!e) continue;
     e.rows = e.rows || []; e.ads = e.ads || [];
-    const before = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P)]);
+    const before = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P), e.geo || null]);
     // zera o tráfego da MGID do dia e soma de novo pelas campanhas
     e.rows.forEach(r => { if (r.p === P) { r.spend = 0; r.imp = 0; r.clicks = 0; r.pv = 0; r.ic = 0; } });
+    const geo = {};
     for (const c of camps) {
       const known = e.ads.find(a => a.p === P && String(a.cid || '') === c.cid);
       const name = names[c.cid] || known?.name || `Campanha ${c.cid}`;
       const cc = s.cidMap[c.cid] || (known ? (known.cc || 'XX') : countryOf(name));
       s.cidMap[c.cid] = cc;
-      let r = e.rows.find(x => x.p === P && x.cc === cc);
-      if (!r) { r = { p: P, cc, spend: 0, imp: 0, clicks: 0, pv: 0, link: 0, ic: 0, sales: 0, rev: 0, ups: 0, upsRev: 0 }; e.rows.push(r); }
-      r.spend = Math.round((r.spend + c.spend) * 100) / 100; r.imp += c.imp; r.clicks += c.clicks; r.pv += c.pv; r.ic += c.ic;
+      const addRow = (rc, v) => {
+        let r = e.rows.find(x => x.p === P && x.cc === rc);
+        if (!r) { r = { p: P, cc: rc, spend: 0, imp: 0, clicks: 0, pv: 0, link: 0, ic: 0, sales: 0, rev: 0, ups: 0, upsRev: 0 }; e.rows.push(r); }
+        r.spend = Math.round((r.spend + v.spend) * 100) / 100; r.imp += v.imp; r.clicks += v.clicks; r.pv += v.pv; r.ic += v.ic;
+      };
+      const gc = cc === 'XX' && geoRep ? geoDay[d][c.cid] : null;
+      if (gc && Object.keys(gc).length) {
+        // campanha com vários países: o gasto vai para o país real de cada clique
+        const split = {};
+        for (const [g, v] of Object.entries(gc)) {
+          const m = { spend: Math.round(v.spent * 100) / 100, imp: Math.round(v.imps), clicks: Math.round(v.clicks), pv: Math.round(ta >= tb ? v.interest : v.decision), ic: Math.round(ta >= tb ? v.decision : v.interest) };
+          if (!m.spend && !m.clicks && !m.imp) continue;
+          addRow(g, m); split[g] = m;
+        }
+        geo[c.cid] = split;
+      } else addRow(cc, c);
       const a = known || (e.ads.push({ name, p: P, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: 0, clicks: 0, sales: 0, rev: 0 }), e.ads[e.ads.length - 1]);
       Object.assign(a, { name, cid: c.cid, spend: c.spend, clicks: c.clicks, pv: c.pv, ic: c.ic });
     }
     const seen = new Set(camps.map(c => c.cid));
     e.ads.forEach(a => { if (a.p === P && a.cid && !seen.has(String(a.cid))) Object.assign(a, { spend: 0, clicks: 0, pv: 0, ic: 0 }); });
-    const after = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P)]);
+    if (Object.keys(geo).length) e.geo = geo; else if (geoRep) delete e.geo;
+    // linhas que ficaram vazias (ex.: o antigo "Vários países") saem
+    e.rows = e.rows.filter(r => r.p !== P || ['spend', 'imp', 'clicks', 'pv', 'ic', 'sales', 'rev', 'ups', 'upsRev'].some(k => num(r[k])));
+    const after = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P), e.geo || null]);
     if (before === after && e.mg) continue;
     e.mg = { at: new Date().toISOString(), src: 'mgid' };
     changed++;

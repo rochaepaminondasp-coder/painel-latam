@@ -152,13 +152,18 @@ function aggregate(sales, days) {
     if (isUps) { c.ups++; c.upsUsd += usd; }
     if (isRef) { c.ref++; c.refUsd += usd; }
     if (isOrder) c.orders++;
-    const cc = String(s.pais_sigla || s.pais || '').toUpperCase(); if (cc) c.ccs[cc] = (c.ccs[cc] || 0) + 1;
+    const cc = String(s.pais_sigla || s.pais || '').toUpperCase().slice(0, 2) || 'OT'; c.ccs[cc] = (c.ccs[cc] || 0) + 1;
+    // vendas separadas pelo país do comprador (para campanhas com vários países)
+    const b = (c.byCc = c.byCc || {})[cc] || (c.byCc[cc] = { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
+    if (isFront) { b.front++; b.frontUsd += usd; } if (isUps) { b.ups++; b.upsUsd += usd; } if (isRef) { b.ref++; b.refUsd += usd; }
     used++;
   }
   for (const d of days) for (const c of Object.values(out[d])) {
     c.cc = Object.entries(c.ccs).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     delete c.ccs;
     for (const k of ['frontUsd', 'upsUsd', 'refUsd']) c[k] = Math.round(c[k] * 100) / 100;
+    for (const b of Object.values(c.byCc || {})) for (const k of ['frontUsd', 'upsUsd', 'refUsd']) b[k] = Math.round(b[k] * 100) / 100;
+    for (const [k, b] of Object.entries(c.byCc || {})) if (!b.front && !b.ups && !b.ref) delete c.byCc[k];
   }
   return { out, used, ignored };
 }
