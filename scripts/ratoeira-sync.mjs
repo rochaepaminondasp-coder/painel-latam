@@ -137,10 +137,24 @@ const UPS = new Set(['UPSELL', 'ORDER_BUMP', 'ORDERBUMP', 'BUMP', 'DOWNSELL', 'C
 const REF = new Set(['REFUND', 'REFUNDED', 'CHARGEBACK', 'CHARGEDBACK', 'REEMBOLSO']);
 function aggregate(sales, days) {
   const out = {}; days.forEach(d => (out[d] = {}));
-  let used = 0, ignored = 0;
+  let used = 0, ignored = 0, moved = 0;
+  const tipoOf = s => String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
+  // Upsell entra no dia da venda front do mesmo cliente (ex.: front 23:58, upsell 00:05 do dia seguinte).
+  const stamp = s => Date.parse(String(s.created_at || '').replace(' ', 'T').replace(/\s+/, '')) || 0;
+  const fronts = {};
   for (const s of sales) {
-    const day = localDate(s.created_at); if (!day || !out[day]) continue;
-    const tipo = String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
+    const lead = s.lead_id || s.page_view_id; if (!lead || !FRONT.has(tipoOf(s))) continue;
+    (fronts[lead] = fronts[lead] || []).push({ t: stamp(s), day: localDate(s.created_at) });
+  }
+  for (const s of sales) {
+    const tipo = tipoOf(s);
+    let day = localDate(s.created_at);
+    if (UPS.has(tipo)) {
+      const lead = s.lead_id || s.page_view_id, t = stamp(s);
+      const parent = (fronts[lead] || []).filter(f => f.t <= t && t - f.t < 48 * 3600e3).sort((a, b) => b.t - a.t)[0];
+      if (parent && parent.day && parent.day !== day && out[parent.day]) { day = parent.day; moved++; }
+    }
+    if (!day || !out[day]) continue;
     const cur = String(s.currency || 'USD').toUpperCase();
     const val = Number(s.valor ?? s.total ?? 0) || 0;
     const isFront = FRONT.has(tipo), isUps = UPS.has(tipo), isRef = REF.has(tipo), isOrder = tipo === 'ORDER_CREATED';
@@ -165,6 +179,7 @@ function aggregate(sales, days) {
     for (const b of Object.values(c.byCc || {})) for (const k of ['frontUsd', 'upsUsd', 'refUsd']) b[k] = Math.round(b[k] * 100) / 100;
     for (const [k, b] of Object.entries(c.byCc || {})) if (!b.front && !b.ups && !b.ref) delete c.byCc[k];
   }
+  if (moved) console.log(`${moved} upsell(s) lançado(s) no dia da venda front do mesmo cliente.`);
   return { out, used, ignored };
 }
 
