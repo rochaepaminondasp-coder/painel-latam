@@ -152,7 +152,10 @@ function aggregate(sales, days) {
     if (UPS.has(tipo)) {
       const lead = s.lead_id || s.page_view_id, t = stamp(s);
       const parent = (fronts[lead] || []).filter(f => f.t <= t && t - f.t < 48 * 3600e3).sort((a, b) => b.t - a.t)[0];
-      if (parent && parent.day && parent.day !== day && out[parent.day]) { day = parent.day; moved++; }
+      if (parent && parent.day && parent.day !== day) {
+        if (!out[parent.day]) continue; // pertence a um dia que esta rodada não regrava: fica lá, não vem para cá
+        day = parent.day; moved++;
+      }
     }
     if (!day || !out[day]) continue;
     const cur = String(s.currency || 'USD').toUpperCase();
