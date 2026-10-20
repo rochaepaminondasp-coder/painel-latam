@@ -132,6 +132,14 @@ async function putData(data, sha, message) {
 }
 
 /* ---------- agregação ---------- */
+// plataforma da venda pela origem do clique na Ratoeira (pixel / tipo de rastreio)
+function platformOf(s) {
+  const t = [s.tipo_ads, s.pixel, s.utm_source, s.network].map(v => String(v || '').toLowerCase()).join(' ');
+  if (t.includes('taboola')) return 'TB';
+  if (t.includes('mgid')) return 'MG';
+  if (t.includes('outbrain')) return 'OB';
+  return PLATFORM;
+}
 const FRONT = new Set(['SALE', 'APPROVED', 'PURCHASE', 'COMPLETE', 'PAID']);
 const UPS = new Set(['UPSELL', 'ORDER_BUMP', 'ORDERBUMP', 'BUMP', 'DOWNSELL', 'CROSS_SELL', 'CROSSSELL']);
 const REF = new Set(['REFUND', 'REFUNDED', 'CHARGEBACK', 'CHARGEDBACK', 'REEMBOLSO']);
@@ -163,7 +171,8 @@ function aggregate(sales, days) {
     const isFront = FRONT.has(tipo), isUps = UPS.has(tipo), isRef = REF.has(tipo), isOrder = tipo === 'ORDER_CREATED';
     if (!isFront && !isUps && !isRef && !isOrder) { ignored++; continue; }
     const cid = String(s.campaign_id || s.utm_campaign || '').trim();
-    const c = out[day][cid] || (out[day][cid] = { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, ccs: {} });
+    const plat = platformOf(s);
+    const c = out[day][cid] || (out[day][cid] = { p: plat, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, ccs: {} });
     const usd = cur === 'USD' ? val : val; // a Ratoeira envia em USD para esta conta; outras moedas ficam como vieram
     if (isFront) { c.front++; c.frontUsd += usd; }
     if (isUps) { c.ups++; c.upsUsd += usd; }
@@ -206,12 +215,13 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const e = data.entries[d] || (Object.keys(camps).length ? { rows: [], ads: [], refunds: 0, other: 0, notes: '' } : null);
     if (!e) continue;
     const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
-    const next = { p: PLATFORM, camps, fx: fx[d] ?? e.rx?.fx ?? null };
+    const next = { p: PLATFORM, ps: ['MG', 'TB'], camps, fx: fx[d] ?? e.rx?.fx ?? null };
     if (prev === JSON.stringify({ camps: next.camps, fx: next.fx })) continue;
     e.rx = { ...next, at: new Date().toISOString(), src: 'ratoeira' };
     data.entries[d] = e; changed++;
     const t = Object.values(camps).reduce((a, c) => ({ f: a.f + c.front, u: a.u + c.ups }), { f: 0, u: 0 });
-    console.log(`  ${d}: ${t.f} vendas front, ${t.u} upsells, ${Object.keys(camps).length} campanhas · USD→BRL ${next.fx ?? '—'}`);
+    const bp = {}; for (const c of Object.values(camps)) bp[c.p] = (bp[c.p] || 0) + c.front;
+    console.log(`  ${d}: ${t.f} vendas front (${Object.entries(bp).map(([k, v]) => k + ' ' + v).join(', ') || '—'}), ${t.u} upsells, ${Object.keys(camps).length} campanhas · USD→BRL ${next.fx ?? '—'}`);
   }
   if (!changed) { console.log('Nada mudou desde a última atualização.'); process.exit(0); }
   const st = await putData(data, sha, `Vendas da Ratoeira · ${days.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)).reverse().join(', ')}`);

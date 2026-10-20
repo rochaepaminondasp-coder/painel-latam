@@ -1,4 +1,4 @@
-name: Atualizar painel (MGID + Ratoeira)
+name: Atualizar painel (MGID + Taboola + Ratoeira)
 
 # Mantém o painel quase em tempo real:
 #  - modo "loop" (padrão): atualiza hoje e ontem a cada ~4 minutos por ~50 minutos e,
@@ -36,10 +36,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Atualizar MGID + Ratoeira
+      - name: Atualizar MGID + Taboola + Ratoeira
         env:
           MGID_TOKEN: ${{ secrets.MGID_TOKEN }}
           MGID_CLIENT_ID: "996870"
+          TABOOLA_CLIENT_ID: ${{ secrets.TABOOLA_CLIENT_ID }}
+          TABOOLA_CLIENT_SECRET: ${{ secrets.TABOOLA_CLIENT_SECRET }}
+          TABOOLA_ACCOUNT_ID: ${{ secrets.TABOOLA_ACCOUNT_ID }}
           RATOEIRA_MCP_URL: ${{ secrets.RATOEIRA_MCP_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MODE: ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'once') && 'once' || 'loop' }}
@@ -54,6 +57,7 @@ jobs:
             # pega a versão mais nova dos robôs a cada rodada (correções valem na hora)
             git fetch -q --depth 1 origin main && git checkout -q FETCH_HEAD -- scripts || echo "::warning::não atualizei os scripts"
             DAYS=$D node scripts/mgid-sync.mjs || { echo "::warning::MGID falhou na rodada $i"; fails=$((fails+1)); }
+            DAYS=$D node scripts/taboola-sync.mjs || { echo "::warning::Taboola falhou na rodada $i"; fails=$((fails+1)); }
             DAYS=$D node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
             echo "::endgroup::"
             [ "$i" -lt "$rounds" ] && sleep 230

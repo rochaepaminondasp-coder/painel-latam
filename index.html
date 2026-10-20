@@ -881,12 +881,16 @@ const fmtAt=s=>{const d=new Date(s);return isNaN(d)?'':pad(d.getDate())+'/'+pad(
 function rxFx(e,s){s=s||state.settings;if(s.currency==='USD')return 1;return num(s.usdBrl)||num(e&&e.rx&&e.rx.fx)||5.4}
 function applyRx(e,s){
   if(!e||!e.rx||!e.rx.camps)return e;s=s||state.settings;
-  const P=e.rx.p||'MG',fx=rxFx(e,s);e.rows=e.rows||[];e.ads=e.ads||[];
-  e.rows.forEach(r=>{if(r.p===P){r.sales=0;r.rev=0;r.ups=0;r.upsRev=0}});
-  let ref=0;const r2=v=>Math.round(v*100)/100;
-  for(const[cid,c]of Object.entries(e.rx.camps)){
+  // cada campanha da Ratoeira traz a plataforma (c.p); dados antigos usam e.rx.p (MGID)
+  const P0=e.rx.p||'MG',fx=rxFx(e,s);e.rows=e.rows||[];e.ads=e.ads||[];
+  const camps=Object.entries(e.rx.camps),Ps=new Set([P0,...(e.rx.ps||[]),...camps.map(([,c])=>c.p||P0)]);
+  e.rows.forEach(r=>{if(Ps.has(r.p)){r.sales=0;r.rev=0;r.ups=0;r.upsRev=0}});
+  let ref=0;const r2=v=>Math.round(v*100)/100,cm=s.cidMap||{};
+  for(const[cid,c]of camps){
+    const P=c.p||P0;
     const ad=cid?e.ads.find(a=>a.p===P&&String(a.cid||'')===cid):null;
-    const fixed=ad?(ad.cc||''):(((s.cidMap||{})[cid]&&(s.cidMap||{})[cid]!=='XX')?(s.cidMap||{})[cid]:'');
+    const mc=cm[(P==='MG'?'':P+':')+cid];
+    const fixed=ad?(ad.cc||''):((mc&&mc!=='XX')?mc:'');
     // campanha de um país só: tudo vai para o país da campanha; campanha com vários países: para o país do comprador
     const parts=fixed?[[fixed,c]]:(c.byCc&&Object.keys(c.byCc).length?Object.entries(c.byCc):[[c.cc||'XX',c]]);
     for(const[cc,b]of parts){
@@ -896,7 +900,7 @@ function applyRx(e,s){
     ref+=num(c.refUsd)*fx;
     if(ad){ad.sales=num(c.front);ad.rev=r2((num(c.frontUsd)+num(c.upsUsd))*fx);ad.rx=1}
   }
-  e.ads.forEach(a=>{if(a.p===P&&a.cid&&!e.rx.camps[String(a.cid)]){a.sales=0;a.rev=0;a.rx=1}});
+  e.ads.forEach(a=>{if(Ps.has(a.p)&&a.cid){const c=e.rx.camps[String(a.cid)];if(!c||(c.p||P0)!==a.p){a.sales=0;a.rev=0;a.rx=1}}});
   e.rxRef=r2(ref);return e;
 }
 function viaByCountry(dates){
@@ -905,9 +909,9 @@ function viaByCountry(dates){
   for(const d of dates){const e=state.entries[d];if(!e)continue;const al=allocAds(e),fx=rxFx(e);
     (e.ads||[]).forEach((a,i)=>{
       if(ui.platform!=='ALL'&&a.p!==ui.platform)return;P0=a.p;
-      const cid=String(a.cid||a.name),rc=e.rx&&e.rx.camps&&a.cid?e.rx.camps[String(a.cid)]:null;
+      const cid=String(a.cid||a.name),rc0=e.rx&&e.rx.camps&&a.cid?e.rx.camps[String(a.cid)]:null,rc=rc0&&(rc0.p||e.rx.p||'MG')===a.p?rc0:null;
       if(a.cc){add(a.cc,cid,a.name,false,num(a.spend),al[i].sales,rc?num(rc.ups):0,al[i].rev);return}
-      const g=(e.geo&&a.cid&&e.geo[String(a.cid)])||{},bc=(rc&&rc.byCc)||(rc&&rc.cc?{[rc.cc]:rc}:{});
+      const g=(a.p==='TB'?(e.tbGeo&&a.cid&&e.tbGeo[String(a.cid)]):(e.geo&&a.cid&&e.geo[String(a.cid)]))||{},bc=(rc&&rc.byCc)||(rc&&rc.cc?{[rc.cc]:rc}:{});
       const ccs=new Set([...Object.keys(g),...Object.keys(bc)]);
       if(!ccs.size){add('XX',cid,a.name,true,num(a.spend),al[i].sales,0,al[i].rev);return}
       for(const cc of ccs){const b=bc[cc]||{};add(cc,cid,a.name,true,num((g[cc]||{}).spend),num(b.front),num(b.ups),(num(b.frontUsd)+num(b.upsUsd))*fx)}
@@ -1196,7 +1200,7 @@ function renderHeatmap(dates){
 }
 
 /* ================= Hoje × Ontem (ao vivo) ================= */
-function entryAt(e){const xs=[e&&e.rx&&e.rx.at,e&&e.mg&&e.mg.at].filter(Boolean).sort();return xs.length?xs[xs.length-1]:null}
+function entryAt(e){const xs=[e&&e.rx&&e.rx.at,e&&e.mg&&e.mg.at,e&&e.tb&&e.tb.at].filter(Boolean).sort();return xs.length?xs[xs.length-1]:null}
 const agoTxt=s=>{if(!s)return'';const m=Math.round((Date.now()-new Date(s))/60000);return m<1?'agora mesmo':m<60?`há ${m} min`:`às ${fmtAt(s).split(' às ')[1]||''}`};
 function renderLive(){
   const box=$('#liveBox');if(!box)return;
@@ -1480,8 +1484,9 @@ function renderPTabs(){
   const ap=$('#addPlat');if(ap)ap.onchange=()=>{if(!ap.value)return;draft.extraP.push(ap.value);curP=ap.value;renderPTabs();renderRows()};
   $('#dropP').textContent=pname(curP);$('#salesP').textContent=pname(curP);
 }
-function rxLocked(){return!!(draft&&draft.rx&&(draft.rx.p||'MG')===curP)}
-function mgLocked(){return!!(draft&&draft.mg&&curP==='MG')}
+function rxLocked(){return!!(draft&&draft.rx&&(draft.rx.ps||[draft.rx.p||'MG']).includes(curP))}
+function mgLocked(){return!!(draft&&((draft.mg&&curP==='MG')||(draft.tb&&curP==='TB')))}
+const apiAt=()=>{const m=curP==='TB'?draft.tb:draft.mg;return m&&m.at}
 function gridHtml(g,list,flashKeys){
   const fs=activeFields(g),x=g==='t',cols=gridCols(fs.length,true),lock=(g==='s'&&rxLocked())||(g==='t'&&mgLocked());
   let h=`<div class="crow head" style="grid-template-columns:${cols}"><div>País</div>${fs.map(f=>`<div>${f.l}</div>`).join('')}<div></div></div>`;
@@ -1493,7 +1498,7 @@ function gridHtml(g,list,flashKeys){
 function renderRows(flashKeys){
   const list=countriesFor(curP);
   if(!list.length){$('#crowsT').innerHTML=`<div class="muted" style="font-size:13.5px;padding:8px 0">Nenhum país nesta plataforma. Adicione abaixo ou importe a planilha.</div>`;$('#crowsS').innerHTML='';}
-  else{$('#crowsT').innerHTML=(mgLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Tráfego da MGID vindo da API</b> — investimento, impressões, cliques, page view e initiate checkout por campanha, atualizados ${draft.mg.at?'em '+esc(fmtAt(draft.mg.at)):'automaticamente'}. Não precisa importar.</span></div>`:'')+gridHtml('t',list,flashKeys);$('#crowsS').innerHTML=(rxLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Vendas da ${esc(pname(curP))} vindas da Ratoeira</b> — front, upsell e reembolsos por campanha, atualizados ${draft.rx.at?'em '+esc(fmtAt(draft.rx.at)):'automaticamente'}. Não precisa lançar.</span></div>`:'')+gridHtml('s',list,flashKeys)}
+  else{$('#crowsT').innerHTML=(mgLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Tráfego da ${esc(pname(curP))} vindo da API</b> — investimento, impressões, cliques e conversões por campanha, atualizados ${apiAt()?'em '+esc(fmtAt(apiAt())):'automaticamente'}. Não precisa importar.</span></div>`:'')+gridHtml('t',list,flashKeys);$('#crowsS').innerHTML=(rxLocked()?`<div class="okline" style="margin:0 0 10px">${ICON.check}<span><b>Vendas da ${esc(pname(curP))} vindas da Ratoeira</b> — front, upsell e reembolsos por campanha, atualizados ${draft.rx.at?'em '+esc(fmtAt(draft.rx.at)):'automaticamente'}. Não precisa lançar.</span></div>`:'')+gridHtml('s',list,flashKeys)}
   $$('#crowsT .crow[data-cc],#crowsS .crow[data-cc]').forEach(row=>{const cc=row.dataset.cc,r=getRow(curP,cc);
     $$('input',row).forEach(i=>{const f=i.dataset.f,isMoney=f==='spend'||f==='rev'||f==='upsRev';
       i.oninput=()=>{r[f]=isMoney?parseNum(i.value):Math.round(parseNum(i.value));
@@ -1534,7 +1539,7 @@ function updAdNote(){const el=$('#adNote');if(!el)return;const s=draft.ads.reduc
 function loadForm(d){
   editingDate=state.entries[d]?d:null;
   const e=state.entries[d]?clone(state.entries[d]):{rows:[],ads:[],refunds:0,other:0,notes:''};
-  draft={rx:e.rx||null,mg:e.mg||null,rows:e.rows||[],ads:e.ads||[],refunds:e.refunds||0,other:e.other||0,notes:e.notes||'',removed:new Set(),added:[],extraP:[]};
+  draft={rx:e.rx||null,mg:e.mg||null,tb:e.tb||null,geo:e.geo||null,tbGeo:e.tbGeo||null,rows:e.rows||[],ads:e.ads||[],refunds:e.refunds||0,other:e.other||0,notes:e.notes||'',removed:new Set(),added:[],extraP:[]};
   if(editingDate){const present=new Set(draft.rows.map(r=>rowKey(r.p,r.cc)));draftPlatforms().forEach(p=>state.settings.countries.forEach(cc=>{if(!present.has(rowKey(p,cc))&&draft.rows.some(r=>r.p===p))draft.removed.add(rowKey(p,cc))}))}
   curP=draftPlatforms()[0];
   $('#eDate').value=d;$('#dlgSub').textContent=dLong(d)+(d===addDays(todayStr(),-1)?' · ontem':d===todayStr()?' · hoje':'');
@@ -1550,7 +1555,7 @@ function buildEntry(){
   const ads0=draft.ads;
   const ads=draft.ads.filter(a=>(a.name||'').trim()||num(a.spend)||num(a.sales)).map(a=>({name:(a.name||'').trim()||'Sem nome',p:a.p,cc:a.cc||'',cid:a.cid||'',spend:num(a.spend),clicks:num(a.clicks),pv:num(a.pv),ic:num(a.ic),sales:num(a.sales),rev:num(a.rev)||(num(a.sales)&&tk?num(a.sales)*tk:0)}));
   const out={rows,ads,refunds:parseNum($('#eRefunds').value),other:parseNum($('#eOther').value),notes:$('#eNotes').value.trim()};
-  if(draft.mg)out.mg=draft.mg;
+  for(const k of['mg','tb','geo','tbGeo'])if(draft[k])out[k]=draft[k];
   if(draft.rx){out.rx=draft.rx;applyRx(out)}
   return out;
 }
