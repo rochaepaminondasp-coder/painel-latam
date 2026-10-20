@@ -93,9 +93,12 @@ if (!ACCOUNT) {
 console.log(`Taboola: atualizando ${days.slice().reverse().join(', ')} …`);
 
 // campanhas e seus países de segmentação
-const target = {}, names = {};
+const target = {}, names = {}, status = {};
 try {
   const j = await api(`${ACCOUNT}/campaigns/?fetch_level=R`);
+  status.campaigns = (j?.results || []).length;
+  status.running = (j?.results || []).filter(c => c.is_active && String(c.status || '').toUpperCase() === 'RUNNING').length;
+  status.statuses = [...new Set((j?.results || []).map(c => String(c.status || '?')))].join(',');
   for (const c of j?.results || []) {
     const id = String(c.id); names[id] = c.name;
     const t = c.country_targeting;
@@ -106,6 +109,7 @@ try {
 const rep = await api(`${ACCOUNT}/reports/campaign-summary/dimensions/campaign_day_breakdown?start_date=${days[days.length - 1]}&end_date=${days[0]}`);
 const rowsRep = rep?.results || [];
 if (rowsRep[0]) console.log('Taboola: campos do relatório: ' + Object.keys(rowsRep[0]).join(', '));
+status.rows = rowsRep.length; status.fields = rowsRep[0] ? Object.keys(rowsRep[0]).join(',') : '';
 const currency = String(rowsRep.find(r => r.currency)?.currency || 'USD').toUpperCase();
 console.log(`Taboola: ${rowsRep.length} linhas (campanha × dia) · moeda: ${currency}`);
 
@@ -123,7 +127,10 @@ for (let attempt = 1; attempt <= 5; attempt++) {
   const s = data.settings = data.settings || {}; s.cidMap = s.cidMap || {};
   if (!(s.platforms || []).includes(P)) s.platforms = [...(s.platforms || []), P];
   const brl = String(s.currency || 'BRL').toUpperCase() !== 'USD' && currency === 'USD';
-  let changed = 0;
+  const stNew = { account: ACCOUNT, ...status }, { at: _a, ...stOld } = s.tbStatus || {};
+  let changed = JSON.stringify(stOld) === JSON.stringify(stNew) ? 0 : 1;
+  if (changed) console.log(`Taboola: ${status.campaigns ?? '?'} campanhas na conta (${status.running ?? '?'} rodando) · status: ${status.statuses || '—'}`);
+  s.tbStatus = { at: new Date().toISOString(), ...stNew };
   for (const d of days) {
     const fx = brl ? (num(s.usdBrl) || await usdBrl(d) || 5.4) : 1;
     const camps = Object.entries(perDay[d]).map(([cid, v]) => ({ cid, spend: r2(v.spend * fx), imp: Math.round(v.imp), clicks: Math.round(v.clicks), conv: Math.round(v.conv) }))
