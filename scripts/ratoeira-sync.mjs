@@ -69,14 +69,17 @@ function toolJson(result) {
 // O MCP da Ratoeira corta cada resposta em ~25 mil caracteres: pedimos páginas pequenas,
 // só dos tipos que interessam, e diminuímos a página se ainda assim vier cortada.
 const TIPOS = ['SALE', 'UPSELL', 'REFUND', 'CHARGEBACK'];
-async function fetchSales(from, to) {
-  await mcp('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'painel-latam', version: '1.0' } });
-  await mcp('notifications/initialized', {}, true);
+let mcpReady = false;
+async function fetchList(tool, from, to, extra = {}, limit = 12) {
+  if (!mcpReady) {
+    await mcp('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'painel-latam', version: '1.0' } });
+    await mcp('notifications/initialized', {}, true); mcpReady = true;
+  }
   const all = [], seen = new Set();
-  let limit = 12, page = 1, total = null, calls = 0;
+  let page = 1, total = null, calls = 0;
   while (calls++ < 400) {
-    const res = await mcp('tools/call', { name: 'get_postback_vendas_by_cliente', arguments: {
-      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:59`, timezone: 'America/Sao_Paulo', tipo: TIPOS, format: 'json', page, limit } });
+    const res = await mcp('tools/call', { name: tool, arguments: {
+      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:59`, timezone: 'America/Sao_Paulo', ...extra, format: 'json', page, limit } });
     let j;
     try { j = toolJson(res); }
     catch (err) {
@@ -94,6 +97,9 @@ async function fetchSales(from, to) {
   }
   return all;
 }
+const fetchSales = (from, to) => fetchList('get_postback_vendas_by_cliente', from, to, { tipo: TIPOS }, 12);
+// checkouts iniciados (Initiate Checkout), já com plataforma, campanha e país
+const fetchCheckouts = (from, to) => fetchList('get_checkout_vendas_by_cliente', from, to, {}, 8);
 
 /* ---------- cotação USD→BRL do dia ---------- */
 // 1º PTAX do Banco Central (venda); em fim de semana/feriado usa o último dia útil anterior.
@@ -145,7 +151,7 @@ function platformOf(s) {
 const FRONT = new Set(['SALE', 'APPROVED', 'PURCHASE', 'COMPLETE', 'PAID']);
 const UPS = new Set(['UPSELL', 'ORDER_BUMP', 'ORDERBUMP', 'BUMP', 'DOWNSELL', 'CROSS_SELL', 'CROSSSELL']);
 const REF = new Set(['REFUND', 'REFUNDED', 'CHARGEBACK', 'CHARGEDBACK', 'REEMBOLSO']);
-function aggregate(sales, days) {
+function aggregate(sales, days, checkouts = []) {
   const out = {}; days.forEach(d => (out[d] = {}));
   let used = 0, ignored = 0, moved = 0;
   const tipoOf = s => String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
@@ -174,7 +180,7 @@ function aggregate(sales, days) {
     if (!isFront && !isUps && !isRef && !isOrder) { ignored++; continue; }
     const cid = String(s.campaign_id || s.utm_campaign || '').trim();
     const plat = platformOf(s);
-    const c = out[day][cid] || (out[day][cid] = { p: plat, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, ccs: {} });
+    const c = out[day][cid] || (out[day][cid] = { p: plat, ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, ccs: {} });
     const usd = cur === 'USD' ? val : val; // a Ratoeira envia em USD para esta conta; outras moedas ficam como vieram
     if (isFront) { c.front++; c.frontUsd += usd; }
     if (isUps) { c.ups++; c.upsUsd += usd; }
@@ -182,16 +188,25 @@ function aggregate(sales, days) {
     if (isOrder) c.orders++;
     const cc = String(s.pais_sigla || s.pais || '').toUpperCase().slice(0, 2) || 'OT'; c.ccs[cc] = (c.ccs[cc] || 0) + 1;
     // vendas separadas pelo país do comprador (para campanhas com vários países)
-    const b = (c.byCc = c.byCc || {})[cc] || (c.byCc[cc] = { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
+    const b = (c.byCc = c.byCc || {})[cc] || (c.byCc[cc] = { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
     if (isFront) { b.front++; b.frontUsd += usd; } if (isUps) { b.ups++; b.upsUsd += usd; } if (isRef) { b.ref++; b.refUsd += usd; }
     used++;
   }
+  for (const s of checkouts) {
+    const day = localDate(s.created_at); if (!day || !out[day]) continue;
+    const cid = String(s.campaign_id || s.utm_campaign || '').trim();
+    const c = out[day][cid] || (out[day][cid] = { p: platformOf(s), ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, ccs: {} });
+    const cc = String(s.pais_sigla || s.pais || '').toUpperCase().slice(0, 2) || 'OT';
+    c.ic++; c.ccs = c.ccs || {};
+    const b = (c.byCc = c.byCc || {})[cc] || (c.byCc[cc] = { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
+    b.ic++;
+  }
   for (const d of days) for (const c of Object.values(out[d])) {
-    c.cc = Object.entries(c.ccs).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    c.cc = Object.entries(c.ccs).sort((a, b) => b[1] - a[1])[0]?.[0] || Object.keys(c.byCc || {})[0] || '';
     delete c.ccs;
     for (const k of ['frontUsd', 'upsUsd', 'refUsd']) c[k] = Math.round(c[k] * 100) / 100;
     for (const b of Object.values(c.byCc || {})) for (const k of ['frontUsd', 'upsUsd', 'refUsd']) b[k] = Math.round(b[k] * 100) / 100;
-    for (const [k, b] of Object.entries(c.byCc || {})) if (!b.front && !b.ups && !b.ref) delete c.byCc[k];
+    for (const [k, b] of Object.entries(c.byCc || {})) if (!b.front && !b.ups && !b.ref && !b.ic) delete c.byCc[k];
   }
   if (moved) console.log(`${moved} upsell(s) lançado(s) no dia da venda front do mesmo cliente.`);
   return { out, used, ignored };
@@ -204,7 +219,10 @@ const from = addDays(days[days.length - 1], -1), to = today; // janela folgada; 
 console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
 
 const sales = await fetchSales(from, to);
-const { out, used, ignored } = aggregate(sales, days);
+let checkouts = [], icOk = true;
+try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk = false; console.log('Checkouts da Ratoeira indisponíveis agora (' + e.message.slice(0, 120) + ').'); }
+const { out, used, ignored } = aggregate(sales, days, checkouts);
+console.log(`Ratoeira: ${checkouts.length} checkouts na janela.`);
 console.log(`Ratoeira: ${sales.length} registros na janela, ${used} usados, ${ignored} de outros tipos ignorados.`);
 const fx = {}; for (const d of days) fx[d] = await usdBrl(d);
 
@@ -217,7 +235,14 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const e = data.entries[d] || (Object.keys(camps).length ? { rows: [], ads: [], refunds: 0, other: 0, notes: '' } : null);
     if (!e) continue;
     const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
-    const next = { p: PLATFORM, ps: ['MG', 'TB'], camps, fx: fx[d] ?? e.rx?.fx ?? null };
+    if (!icOk && e.rx?.ic) // sem os checkouts agora: mantém os que já estavam
+      for (const [cid, o] of Object.entries(e.rx.camps || {})) {
+        if (!o.ic) continue;
+        const c = camps[cid] || (camps[cid] = { p: o.p, ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, cc: o.cc, byCc: {} });
+        c.ic = o.ic; c.byCc = c.byCc || {};
+        for (const [k, b] of Object.entries(o.byCc || {})) if (b.ic) (c.byCc[k] = c.byCc[k] || { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }).ic = b.ic;
+      }
+    const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null };
     if (prev === JSON.stringify({ camps: next.camps, fx: next.fx })) continue;
     e.rx = { ...next, at: new Date().toISOString(), src: 'ratoeira' };
     data.entries[d] = e; changed++;

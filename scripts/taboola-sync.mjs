@@ -109,10 +109,19 @@ try {
   }
 } catch (e) { console.log('Taboola: não li a segmentação das campanhas (' + e.message.slice(0, 120) + ') — uso o nome da campanha.'); }
 
-const rep = await api(`${ACCOUNT}/reports/campaign-summary/dimensions/campaign_day_breakdown?start_date=${days[days.length - 1]}&end_date=${days[0]}`);
+const rep = await api(`${ACCOUNT}/reports/campaign-summary/dimensions/campaign_day_breakdown?start_date=${days[days.length - 1]}&end_date=${days[0]}&include_multi_conversions=true`);
+// conversões por regra (Backstage → Conversions): o nome da regra diz a etapa do funil
+const stageOf = cap => { const n = String(cap || '').toLowerCase(); if (!/conversions\s*$/.test(n)) return null;
+  if (/checkout|initiate|iniciar|finalizar/.test(n)) return 'ic';
+  if (/page.?view|view.?content|pageview|visita|landing|\bpv\b/.test(n)) return 'pv';
+  return null; };
+function ruleMap(j) { const m = {}; for (const f of j?.metadata?.dynamic_fields || []) { const st = stageOf(f.caption); if (st) m[String(f.id)] = st; } return m; }
+function stages(row, m) { const o = { pv: 0, ic: 0 }; for (const f of row.dynamic_fields || []) { const st = m[String(f.id)]; if (st) o[st] += num(f.value); } return o; }
+const RULES = ruleMap(rep);
+status.rules = (rep?.metadata?.dynamic_fields || []).map(f => String(f.caption || '')).filter(c => /conversions\s*$/i.test(c)).map(c => c + ' → ' + (stageOf(c) || '—')).join(' | ');
 const rowsRep = rep?.results || [];
 if (rowsRep[0]) console.log('Taboola: campos do relatório: ' + Object.keys(rowsRep[0]).join(', '));
-status.rows = rowsRep.length; status.fields = rowsRep[0] ? Object.keys(rowsRep[0]).join(',') : '';
+status.rows = rowsRep.length;
 const currency = String(rowsRep.find(r => r.currency)?.currency || 'USD').toUpperCase();
 console.log(`Taboola: ${rowsRep.length} linhas (campanha × dia) · moeda: ${currency}`);
 
@@ -121,8 +130,9 @@ for (const row of rowsRep) {
   const d = String(row.date || '').slice(0, 10), cid = String(row.campaign ?? '');
   if (!perDay[d] || !cid) continue;
   if (row.campaign_name) names[cid] = row.campaign_name;
-  const o = perDay[d][cid] || (perDay[d][cid] = { spend: 0, imp: 0, clicks: 0, conv: 0 });
+  const o = perDay[d][cid] || (perDay[d][cid] = { spend: 0, imp: 0, clicks: 0, conv: 0, pv: 0, ic: 0 });
   o.spend += num(row.spent); o.imp += num(row.impressions); o.clicks += num(row.clicks); o.conv += num(row.cpa_actions_num);
+  const sg = stages(row, RULES); o.pv += sg.pv; o.ic += sg.ic;
 }
 
 for (let attempt = 1; attempt <= 5; attempt++) {
@@ -136,18 +146,18 @@ for (let attempt = 1; attempt <= 5; attempt++) {
   s.tbStatus = { at: new Date().toISOString(), ...stNew };
   for (const d of days) {
     const fx = brl ? (num(s.usdBrl) || await usdBrl(d) || 5.4) : 1;
-    const camps = Object.entries(perDay[d]).map(([cid, v]) => ({ cid, spend: r2(v.spend * fx), imp: Math.round(v.imp), clicks: Math.round(v.clicks), conv: Math.round(v.conv) }))
+    const camps = Object.entries(perDay[d]).map(([cid, v]) => ({ cid, spend: r2(v.spend * fx), imp: Math.round(v.imp), clicks: Math.round(v.clicks), conv: Math.round(v.conv), pv: Math.round(v.pv), ic: Math.round(v.ic) }))
       .filter(c => c.spend || c.clicks || c.imp);
     const e = data.entries[d] || (camps.length ? (data.entries[d] = { rows: [], ads: [], refunds: 0, other: 0, notes: '' }) : null);
     if (!e) continue;
     e.rows = e.rows || []; e.ads = e.ads || [];
     const before = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P), e.tbGeo || null]);
-    e.rows.forEach(r => { if (r.p === P) { r.spend = 0; r.imp = 0; r.clicks = 0; } });
+    e.rows.forEach(r => { if (r.p === P) { r.spend = 0; r.imp = 0; r.clicks = 0; r.pv = 0; r.ic = 0; } });
     const geo = {};
     const addRow = (rc, v) => {
       let r = e.rows.find(x => x.p === P && x.cc === rc);
       if (!r) { r = { p: P, cc: rc, spend: 0, imp: 0, clicks: 0, pv: 0, link: 0, ic: 0, sales: 0, rev: 0, ups: 0, upsRev: 0 }; e.rows.push(r); }
-      r.spend = r2(r.spend + v.spend); r.imp += v.imp; r.clicks += v.clicks;
+      r.spend = r2(r.spend + v.spend); r.imp += v.imp; r.clicks += v.clicks; r.pv += v.pv || 0; r.ic += v.ic || 0;
     };
     for (const c of camps) {
       const known = e.ads.find(a => a.p === P && String(a.cid || '') === c.cid);
@@ -158,11 +168,12 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       let split = null;
       if (cc === 'XX') { // vários países: gasto pelo país real dos cliques
         try {
-          const g = await api(`${ACCOUNT}/reports/campaign-summary/dimensions/country_breakdown?start_date=${d}&end_date=${d}&campaign=${c.cid}`);
+          const g = await api(`${ACCOUNT}/reports/campaign-summary/dimensions/country_breakdown?start_date=${d}&end_date=${d}&campaign=${c.cid}&include_multi_conversions=true`);
+          const gm = ruleMap(g);
           split = {};
           for (const row of g?.results || []) {
             const k = String(row.country || '').toUpperCase().slice(0, 2) || 'OT';
-            const m = { spend: r2(num(row.spent) * fx), imp: Math.round(num(row.impressions)), clicks: Math.round(num(row.clicks)), pv: 0, ic: 0 };
+            const m = { spend: r2(num(row.spent) * fx), imp: Math.round(num(row.impressions)), clicks: Math.round(num(row.clicks)), ...stages(row, gm) };
             if (m.spend || m.clicks || m.imp) { addRow(k, m); split[k] = m; }
           }
           if (!Object.keys(split).length) split = null;
@@ -170,18 +181,18 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       }
       if (split) geo[c.cid] = split; else addRow(cc, c);
       const a = known || (e.ads.push({ name, p: P, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: 0, clicks: 0, sales: 0, rev: 0 }), e.ads[e.ads.length - 1]);
-      Object.assign(a, { name, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: c.spend, clicks: c.clicks, conv: c.conv });
+      Object.assign(a, { name, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: c.spend, clicks: c.clicks, conv: c.conv, pv: c.pv, ic: c.ic });
     }
     const seen = new Set(camps.map(c => c.cid));
-    e.ads.forEach(a => { if (a.p === P && a.cid && !seen.has(String(a.cid))) Object.assign(a, { spend: 0, clicks: 0, conv: 0 }); });
+    e.ads.forEach(a => { if (a.p === P && a.cid && !seen.has(String(a.cid))) Object.assign(a, { spend: 0, clicks: 0, conv: 0, pv: 0, ic: 0 }); });
     if (Object.keys(geo).length) e.tbGeo = geo; else delete e.tbGeo;
     e.rows = e.rows.filter(r => r.p !== P || ['spend', 'imp', 'clicks', 'pv', 'ic', 'sales', 'rev', 'ups', 'upsRev'].some(k => num(r[k])));
     const after = JSON.stringify([e.rows.filter(r => r.p === P), e.ads.filter(a => a.p === P), e.tbGeo || null]);
     if (before === after && e.tb) continue;
     e.tb = { at: new Date().toISOString(), src: 'taboola', cur: currency, fx: fx === 1 ? null : r2(fx * 100) / 100 };
     changed++;
-    const t = camps.reduce((x, c) => ({ s: x.s + c.spend, k: x.k + c.clicks, v: x.v + c.conv }), { s: 0, k: 0, v: 0 });
-    console.log(`  ${d}: ${camps.length} campanhas · investimento ${t.s.toFixed(2)} · ${t.k} cliques · ${t.v} conversões (pixel)`);
+    const t = camps.reduce((x, c) => ({ s: x.s + c.spend, k: x.k + c.clicks, v: x.v + c.conv, pv: x.pv + c.pv, ic: x.ic + c.ic }), { s: 0, k: 0, v: 0, pv: 0, ic: 0 });
+    console.log(`  ${d}: ${camps.length} campanhas · investimento ${t.s.toFixed(2)} · ${t.k} cliques · ${t.pv} page views · ${t.ic} initiate checkouts · ${t.v} conversões no total`);
   }
   if (!changed) { console.log('Taboola: nada mudou desde a última atualização.'); process.exit(0); }
   const st = await putData(data, sha, `Tráfego da Taboola · ${days.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)).reverse().join(', ')}`);

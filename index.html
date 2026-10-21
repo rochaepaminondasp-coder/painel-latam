@@ -884,7 +884,8 @@ function applyRx(e,s){
   // cada campanha da Ratoeira traz a plataforma (c.p); dados antigos usam e.rx.p (MGID)
   const P0=e.rx.p||'MG',fx=rxFx(e,s);e.rows=e.rows||[];e.ads=e.ads||[];
   const camps=Object.entries(e.rx.camps),Ps=new Set([P0,...(e.rx.ps||[]),...camps.map(([,c])=>c.p||P0)]);
-  e.rows.forEach(r=>{if(Ps.has(r.p)){r.sales=0;r.rev=0;r.ups=0;r.upsRev=0}});
+  const IC=!!e.rx.ic; // initiate checkout também vem da Ratoeira
+  e.rows.forEach(r=>{if(Ps.has(r.p)){r.sales=0;r.rev=0;r.ups=0;r.upsRev=0;if(IC)r.ic=0}});
   let ref=0;const r2=v=>Math.round(v*100)/100,cm=s.cidMap||{};
   for(const[cid,c]of camps){
     const P=c.p||P0;
@@ -895,12 +896,12 @@ function applyRx(e,s){
     const parts=fixed?[[fixed,c]]:(c.byCc&&Object.keys(c.byCc).length?Object.entries(c.byCc):[[c.cc||'XX',c]]);
     for(const[cc,b]of parts){
       let r=e.rows.find(x=>x.p===P&&x.cc===cc);if(!r){r={p:P,cc,spend:0,imp:0,clicks:0,pv:0,link:0,ic:0,sales:0,rev:0,ups:0,upsRev:0};e.rows.push(r)}
-      r.sales+=num(b.front);r.rev=r2(num(r.rev)+num(b.frontUsd)*fx);r.ups+=num(b.ups);r.upsRev=r2(num(r.upsRev)+num(b.upsUsd)*fx);
+      if(IC)r.ic=num(r.ic)+num(b.ic);r.sales+=num(b.front);r.rev=r2(num(r.rev)+num(b.frontUsd)*fx);r.ups+=num(b.ups);r.upsRev=r2(num(r.upsRev)+num(b.upsUsd)*fx);
     }
     ref+=num(c.refUsd)*fx;
-    if(ad){ad.sales=num(c.front);ad.rev=r2((num(c.frontUsd)+num(c.upsUsd))*fx);ad.rx=1}
+    if(ad){ad.sales=num(c.front);ad.rev=r2((num(c.frontUsd)+num(c.upsUsd))*fx);ad.rx=1;if(IC)ad.ic=num(c.ic)}
   }
-  e.ads.forEach(a=>{if(Ps.has(a.p)&&a.cid){const c=e.rx.camps[String(a.cid)];if(!c||(c.p||P0)!==a.p){a.sales=0;a.rev=0;a.rx=1}}});
+  e.ads.forEach(a=>{if(Ps.has(a.p)&&a.cid){const c=e.rx.camps[String(a.cid)];if(!c||(c.p||P0)!==a.p){a.sales=0;a.rev=0;a.rx=1;if(IC)a.ic=0}}});
   e.rxRef=r2(ref);return e;
 }
 function viaByCountry(dates){
