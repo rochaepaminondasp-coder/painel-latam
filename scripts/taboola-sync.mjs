@@ -51,6 +51,8 @@ function countryOf(name) {
   const n = String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const hits = new Set(Object.entries(CC).filter(([, a]) => a.some(w => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(n))).map(([c]) => c));
   for (const t of String(name || '').match(/\b[A-Z]{2}\b/g) || []) if (CC[t] && !['DO', 'ES', 'PE'].includes(t)) hits.add(t);
+  const C3 = { ARG: 'AR', CHL: 'CL', CHI: 'CL', COL: 'CO', MEX: 'MX', PER: 'PE', URU: 'UY', URY: 'UY', PAN: 'PA', PN: 'PA', ECU: 'EC', BOL: 'BO', PAR: 'PY', PRY: 'PY', GUA: 'GT', CRI: 'CR', VEN: 'VE' };
+  for (const t of String(name || '').match(/\b[A-Z]{2,3}\b/g) || []) if (C3[t]) hits.add(C3[t]);
   return hits.size === 1 ? [...hits][0] : 'XX';
 }
 
@@ -102,7 +104,8 @@ try {
   for (const c of j?.results || []) {
     const id = String(c.id); names[id] = c.name;
     const t = c.country_targeting;
-    target[id] = (t && t.type === 'INCLUDE' && Array.isArray(t.value) && t.value.length === 1) ? String(t.value[0]).toUpperCase() : null;
+    const vals = (t && t.type === 'INCLUDE' && Array.isArray(t.value)) ? t.value : [];
+    target[id] = vals.length === 1 ? String(vals[0]).toUpperCase() : vals.length > 1 ? 'XX' : null; // vários países = multi-país
   }
 } catch (e) { console.log('Taboola: não li a segmentação das campanhas (' + e.message.slice(0, 120) + ') — uso o nome da campanha.'); }
 
@@ -150,7 +153,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       const known = e.ads.find(a => a.p === P && String(a.cid || '') === c.cid);
       const name = names[c.cid] || known?.name || `Campanha ${c.cid}`;
       const key = P + ':' + c.cid;
-      const cc = target[c.cid] || s.cidMap[key] || (known ? (known.cc || 'XX') : countryOf(name));
+      const cc = target[c.cid] || countryOf(name);
       s.cidMap[key] = cc;
       let split = null;
       if (cc === 'XX') { // vários países: gasto pelo país real dos cliques
@@ -167,7 +170,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       }
       if (split) geo[c.cid] = split; else addRow(cc, c);
       const a = known || (e.ads.push({ name, p: P, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: 0, clicks: 0, sales: 0, rev: 0 }), e.ads[e.ads.length - 1]);
-      Object.assign(a, { name, cid: c.cid, spend: c.spend, clicks: c.clicks, conv: c.conv });
+      Object.assign(a, { name, cc: cc === 'XX' ? '' : cc, cid: c.cid, spend: c.spend, clicks: c.clicks, conv: c.conv });
     }
     const seen = new Set(camps.map(c => c.cid));
     e.ads.forEach(a => { if (a.p === P && a.cid && !seen.has(String(a.cid))) Object.assign(a, { spend: 0, clicks: 0, conv: 0 }); });

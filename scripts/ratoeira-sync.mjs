@@ -134,11 +134,13 @@ async function putData(data, sha, message) {
 /* ---------- agregação ---------- */
 // plataforma da venda pela origem do clique na Ratoeira (pixel / tipo de rastreio)
 function platformOf(s) {
-  const t = [s.tipo_ads, s.pixel, s.utm_source, s.network].map(v => String(v || '').toLowerCase()).join(' ');
-  if (t.includes('taboola')) return 'TB';
+  const tipo = String(s.tipo_ads || '').toLowerCase();
+  const t = [tipo, s.pixel, s.utm_source, s.network].map(v => String(v || '').toLowerCase()).join(' ');
+  if (t.includes('taboola') || tipo.startsWith('tbl')) return 'TB';
   if (t.includes('mgid')) return 'MG';
-  if (t.includes('outbrain')) return 'OB';
-  return PLATFORM;
+  if (t.includes('outbrain') || tipo.startsWith('ob_')) return 'OB';
+  const rede = { 4: 'TB', 6: 'MG' }[String(s.rede_ads_id || '')]; // rede de anúncios na Ratoeira
+  return rede || PLATFORM;
 }
 const FRONT = new Set(['SALE', 'APPROVED', 'PURCHASE', 'COMPLETE', 'PAID']);
 const UPS = new Set(['UPSELL', 'ORDER_BUMP', 'ORDERBUMP', 'BUMP', 'DOWNSELL', 'CROSS_SELL', 'CROSSSELL']);
