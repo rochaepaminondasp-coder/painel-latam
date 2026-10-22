@@ -68,7 +68,7 @@ function toolJson(result) {
 }
 // O MCP da Ratoeira corta cada resposta em ~25 mil caracteres: pedimos páginas pequenas,
 // só dos tipos que interessam, e diminuímos a página se ainda assim vier cortada.
-const TIPOS = ['SALE', 'UPSELL', 'REFUND', 'CHARGEBACK'];
+const TIPOS = ['SALE', 'UPSELL', 'REFUND', 'CHARGEBACK', 'ORDER_CREATED'];
 let mcpReady = false;
 async function fetchList(tool, from, to, extra = {}, limit = 12) {
   if (!mcpReady) {
@@ -222,6 +222,57 @@ const sales = await fetchSales(from, to);
 let checkouts = [], icOk = true;
 try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk = false; console.log('Checkouts da Ratoeira indisponíveis agora (' + e.message.slice(0, 120) + ').'); }
 const { out, used, ignored } = aggregate(sales, days, checkouts);
+
+/* ---------- conferência com o Dashboard Financeiro da Ratoeira ----------
+   A lista de postbacks às vezes demora a registrar uma venda que o financeiro já mostra.
+   Se o financeiro tiver mais vendas/upsells no dia, a diferença entra como provisória (est: 1)
+   na campanha do pedido criado que ainda não virou venda (mesmo cliente); o registro real substitui depois. */
+async function finDay(day) {
+  const res = await mcp('tools/call', { name: 'get_financial_dashboard', arguments: { periodoAtual: { dataInicio: day, dataFim: day }, usarCache: false, format: 'json' } });
+  const j = toolJson(res), r = j?.metrics?.resultadoPeriodoSelecionado;
+  if (!r) return null;
+  return { front: num(r.vendas_sem_upsell_quantidade), frontUsd: num(r.vendas_sem_upsell_valor_dolar), ups: num(r.vendas_upsell_quantidade), upsUsd: num(r.vendas_upsell_total_valor_dolar) };
+}
+function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+let reconciled = 0;
+for (const d of days) {
+  let fin = null;
+  try { fin = await finDay(d); } catch (e) { console.log(`Financeiro da Ratoeira indisponível para ${d} (${e.message.slice(0, 80)}).`); continue; }
+  if (!fin) continue;
+  // compara pela data original de cada registro (o financeiro conta assim), não pelo dia em que o upsell foi lançado
+  const camps = out[d], tot = { f: 0, u: 0, fu: 0, uu: 0 };
+  for (const s of sales) {
+    if (localDate(s.created_at) !== d) continue;
+    const t = String(s.tipo || '').toUpperCase().replace(/\s+/g, '_'), v = num(s.valor ?? s.total);
+    if (FRONT.has(t)) { tot.f++; tot.fu += v; } else if (UPS.has(t)) { tot.u++; tot.uu += v; }
+  }
+  let mf = fin.front - tot.f, mu = fin.ups - tot.u;
+  if (mf <= 0 && mu <= 0) continue;
+  const fUsd = mf > 0 ? Math.max(0, fin.frontUsd - tot.fu) / mf : 0, uUsd = mu > 0 ? Math.max(0, fin.upsUsd - tot.uu) / mu : 0;
+  // pedidos criados no dia sem venda do mesmo cliente, do mais recente para o mais antigo
+  const paid = new Set(sales.filter(s => FRONT.has(String(s.tipo || '').toUpperCase())).map(s => s.lead_id || s.page_view_id));
+  const open = sales.filter(s => String(s.tipo || '').toUpperCase() === 'ORDER_CREATED' && localDate(s.created_at) === d && !paid.has(s.lead_id || s.page_view_id))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const used = new Set(), hit = [];
+  const slot = (cid, p, cc) => {
+    const c = camps[cid] || (camps[cid] = { p, ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, cc, byCc: {} });
+    c.est = 1; c.byCc = c.byCc || {};
+    return [c, c.byCc[cc] || (c.byCc[cc] = { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 })];
+  };
+  for (; mf > 0; mf--) {
+    const o = open.find(x => !used.has(x.lead_id || x.page_view_id));
+    const cid = o ? String(o.campaign_id || o.utm_campaign || '') : '', cc = o ? String(o.pais_sigla || 'OT').toUpperCase().slice(0, 2) : 'OT';
+    if (o) { used.add(o.lead_id || o.page_view_id); hit.push([cid, platformOf(o), cc]); }
+    const [c, b] = slot(cid, o ? platformOf(o) : PLATFORM, cc);
+    c.front++; c.frontUsd = Math.round((c.frontUsd + fUsd) * 100) / 100; b.front++; b.frontUsd = Math.round((b.frontUsd + fUsd) * 100) / 100; reconciled++;
+  }
+  for (let i = 0; mu > 0; mu--, i++) { // upsell provisório vai junto da venda provisória (mesmo cliente), se houver
+    const [cid, p, cc] = hit[i] || ['', PLATFORM, 'OT'];
+    const [c, b] = slot(cid, p, cc);
+    c.ups++; c.upsUsd = Math.round((c.upsUsd + uUsd) * 100) / 100; b.ups++; b.upsUsd = Math.round((b.upsUsd + uUsd) * 100) / 100; reconciled++;
+  }
+}
+if (reconciled) console.log(`Financeiro da Ratoeira: ${reconciled} venda(s)/upsell(s) ainda sem postback lançada(s) como provisória(s).`);
 console.log(`Ratoeira: ${checkouts.length} checkouts na janela.`);
 console.log(`Ratoeira: ${sales.length} registros na janela, ${used} usados, ${ignored} de outros tipos ignorados.`);
 const fx = {}; for (const d of days) fx[d] = await usdBrl(d);
