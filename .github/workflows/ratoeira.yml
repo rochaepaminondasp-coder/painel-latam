@@ -58,7 +58,8 @@ jobs:
             git fetch -q --depth 1 origin main && git checkout -q FETCH_HEAD -- scripts || echo "::warning::não atualizei os scripts"
             DAYS=$D node scripts/mgid-sync.mjs || { echo "::warning::MGID falhou na rodada $i"; fails=$((fails+1)); }
             DAYS=$D node scripts/taboola-sync.mjs || { echo "::warning::Taboola falhou na rodada $i"; fails=$((fails+1)); }
-            DAYS=$D node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
+            CK=0; [ $(( (i - 1) % 4 )) -eq 0 ] && CK=1   # checkouts a cada ~16 min (poupa o limite da Ratoeira)
+            DAYS=$D CHECKOUTS=$CK node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
             echo "::endgroup::"
             [ "$i" -lt "$rounds" ] && sleep 230
           done

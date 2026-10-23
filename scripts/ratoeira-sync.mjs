@@ -42,7 +42,13 @@ async function mcp(method, params, notify = false) {
   if (!notify) body.id = ++rpcId;
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
   if (sessionId) headers['mcp-session-id'] = sessionId;
-  const r = await fetch(MCP_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+  let r;
+  for (let t = 1; ; t++) { // a Ratoeira limita o ritmo: se pedir pausa, espera e tenta de novo
+    r = await fetch(MCP_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (r.status !== 429 || t >= 4) break;
+    console.log(`Ratoeira pediu pausa (muitas consultas); esperando ${20 * t}s…`);
+    await new Promise(ok => setTimeout(ok, 20000 * t));
+  }
   const sid = r.headers.get('mcp-session-id'); if (sid) sessionId = sid;
   if (notify) return null;
   const txt = await r.text();
@@ -219,8 +225,9 @@ const from = addDays(days[days.length - 1], -1), to = today; // janela folgada; 
 console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
 
 const sales = await fetchSales(from, to);
-let checkouts = [], icOk = true;
-try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk = false; console.log('Checkouts da Ratoeira indisponíveis agora (' + e.message.slice(0, 120) + ').'); }
+// checkouts são muitos registros (muitas páginas): só a cada algumas rodadas (CHECKOUTS=0 pula e mantém os últimos)
+let checkouts = [], icOk = process.env.CHECKOUTS !== '0';
+if (icOk) try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk = false; console.log('Checkouts da Ratoeira indisponíveis agora (' + e.message.slice(0, 120) + ').'); }
 const { out, used, ignored } = aggregate(sales, days, checkouts);
 
 /* ---------- conferência com o Dashboard Financeiro da Ratoeira ----------
