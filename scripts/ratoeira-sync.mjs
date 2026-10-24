@@ -289,6 +289,7 @@ if (reconciled) console.log(`Financeiro da Ratoeira: ${reconciled} venda(s)/upse
    A partir de KP_START, front/upsell/reembolso vêm da KashPay (horário real do pagamento), não dos postbacks.
    Campanha = utm_campaign; plataforma e país = registro da Ratoeira com o mesmo código de visita (vSt…). */
 const kpDays = days.filter(d => d >= KP_START);
+const visUsed = {}; // dia → visitas com país conhecido (guardado em rx.vis)
 let kpSrc = false;
 if (kpDays.length) {
   let kp = null;
@@ -300,8 +301,11 @@ if (kpDays.length) {
   else {
     kpSrc = true;
     const pvOf = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^vSt/, '');
-    const visit = {}; // código de visita → plataforma e país (Ratoeira)
-    for (const s of [...sales, ...checkouts]) { const pv = s.page_view_id; if (pv && !visit[pv]) visit[pv] = { p: platformOf(s), cc: String(s.pais_sigla || s.pais || '').toUpperCase().slice(0, 2) }; }
+    // código de visita → plataforma e país. Vem da Ratoeira (pedido criado, venda ou checkout) e fica guardado
+    // no próprio dia (rx.vis), para a venda não perder o país nas rodadas em que a Ratoeira não traz aquele registro.
+    const visit = {};
+    try { const { data: prevData } = await getData(); for (const d of kpDays) Object.assign(visit, prevData.entries?.[d]?.rx?.vis || {}); } catch {}
+    for (const s of [...sales, ...checkouts]) { const pv = s.page_view_id, cc = String(s.pais_sigla || s.pais || '').toUpperCase().slice(0, 2); if (pv && cc) visit[pv] = { p: platformOf(s), cc }; }
     const isFrontKp = v => (v.of || []).some(o => /protoc/i.test(o.n || '') && /honey/i.test(o.n || ''));
     const usdOf = (v, d) => { const a = (Number(v.amt) || 0) / 100; return String(v.cur || 'USD').toUpperCase() === 'USD' ? a : a / (fxKp[d] || 5.4); };
     const fxKp = {}; for (const d of kpDays) fxKp[d] = await usdBrl(d);
@@ -314,6 +318,7 @@ if (kpDays.length) {
     for (const v of kp) if (isFrontKp(v) && v.paid) frontDay[pvOf(v)] = brDay(v.paid);
     const slot = (d, v) => {
       const cid = String(v.tr?.uc || '').trim(), info = visit[pvOf(v)] || {};
+      if (visit[pvOf(v)]) (visUsed[d] = visUsed[d] || {})[pvOf(v)] = visit[pvOf(v)]; else pend++;
       const camps = out[d];
       const c = camps[cid] || (camps[cid] = { p: info.p || PLATFORM, ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, cc: '', byCc: {} });
       if (info.p) c.p = info.p;
@@ -321,7 +326,7 @@ if (kpDays.length) {
       const b = (c.byCc = c.byCc || {})[cc] || (c.byCc[cc] = { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
       return [c, b];
     };
-    let n = 0;
+    let n = 0, pend = 0;
     for (const v of kp) {
       if (!['paid', 'refunded', 'chargeback'].includes(v.st) || !v.paid) continue;
       const front = isFrontKp(v);
@@ -341,7 +346,7 @@ if (kpDays.length) {
       for (const k of ['frontUsd', 'upsUsd', 'refUsd']) c[k] = Math.round(c[k] * 100) / 100;
       for (const [k, b] of Object.entries(c.byCc || {})) { for (const f of ['frontUsd', 'upsUsd', 'refUsd']) b[f] = Math.round(b[f] * 100) / 100; if (!b.front && !b.ups && !b.ref && !b.ic) delete c.byCc[k]; }
     }
-    console.log(`KashPay: ${n} venda(s)/upsell(s) lançada(s) em ${kpDays.join(', ')}.`);
+    console.log(`KashPay: ${n} venda(s)/upsell(s) lançada(s) em ${kpDays.join(', ')}${pend ? ` · ${pend} ainda sem país (aguardando a Ratoeira)` : ''}.`);
   }
 }
 console.log(`Ratoeira: ${checkouts.length} checkouts na janela.`);
@@ -367,8 +372,10 @@ for (let attempt = 1; attempt <= 5; attempt++) {
         for (const [k, b] of Object.entries(o.byCc || {})) if (b.ic) (c.byCc[k] = c.byCc[k] || { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }).ic = b.ic;
       }
     const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null };
-    if (prev === JSON.stringify({ camps: next.camps, fx: next.fx })) continue;
+    const visNew = kpSrc && d >= KP_START && Object.keys(visUsed[d] || {}).some(k => !(e.rx?.vis || {})[k]);
+    if (prev === JSON.stringify({ camps: next.camps, fx: next.fx }) && !visNew) continue;
     e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && d >= KP_START ? 'kashpay' : 'ratoeira' };
+    if (kpSrc && d >= KP_START) e.rx.vis = { ...(e.rx.vis || {}), ...(visUsed[d] || {}) }; // países já descobertos
     data.entries[d] = e; changed++;
     const t = Object.values(camps).reduce((a, c) => ({ f: a.f + c.front, u: a.u + c.ups }), { f: 0, u: 0 });
     const bp = {}; for (const c of Object.values(camps)) bp[c.p] = (bp[c.p] || 0) + c.front;
