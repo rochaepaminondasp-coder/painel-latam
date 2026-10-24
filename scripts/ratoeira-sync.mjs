@@ -15,6 +15,9 @@ const REPO = process.env.GITHUB_REPOSITORY;
 const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias anteriores a hoje
 const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const PLATFORM = process.env.PLATFORM || 'MG';
+const KP_URL = (process.env.KASHPAY_URL || 'https://kashpay-vendas.rochaepaminondasp.workers.dev').replace(/\/$/, '');
+const KP_START = process.env.KP_START || '2026-10-25'; // a partir deste dia as vendas vêm da KashPay
+const brDay = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? null : ymd(new Date(t + TZ_OFFSET_H * 3600e3)); };
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
 const TZ_OFFSET_H = -3; // horário de Brasília
@@ -243,6 +246,7 @@ async function finDay(day) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 let reconciled = 0;
 for (const d of days) {
+  if (d >= KP_START) continue; // dias da KashPay não precisam da conferência
   let fin = null;
   try { fin = await finDay(d); } catch (e) { console.log(`Financeiro da Ratoeira indisponível para ${d} (${e.message.slice(0, 80)}).`); continue; }
   if (!fin) continue;
@@ -280,6 +284,66 @@ for (const d of days) {
   }
 }
 if (reconciled) console.log(`Financeiro da Ratoeira: ${reconciled} venda(s)/upsell(s) ainda sem postback lançada(s) como provisória(s).`);
+
+/* ---------- vendas da KashPay (webhooks) ----------
+   A partir de KP_START, front/upsell/reembolso vêm da KashPay (horário real do pagamento), não dos postbacks.
+   Campanha = utm_campaign; plataforma e país = registro da Ratoeira com o mesmo código de visita (vSt…). */
+const kpDays = days.filter(d => d >= KP_START);
+let kpSrc = false;
+if (kpDays.length) {
+  let kp = null;
+  try {
+    const r = await fetch(`${KP_URL}/vendas?from=${addDays(kpDays[kpDays.length - 1], -2)}&t=${Date.now()}`);
+    if (r.ok) kp = ((await r.json()).vendas || []).filter(v => v && v.id && !String(v.id).startsWith('test_'));
+  } catch {}
+  if (!kp) console.log('KashPay indisponível agora — mantendo as vendas da Ratoeira nesta rodada.');
+  else {
+    kpSrc = true;
+    const pvOf = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^vSt/, '');
+    const visit = {}; // código de visita → plataforma e país (Ratoeira)
+    for (const s of [...sales, ...checkouts]) { const pv = s.page_view_id; if (pv && !visit[pv]) visit[pv] = { p: platformOf(s), cc: String(s.pais_sigla || s.pais || '').toUpperCase().slice(0, 2) }; }
+    const isFrontKp = v => (v.of || []).some(o => /protoc/i.test(o.n || '') && /honey/i.test(o.n || ''));
+    const usdOf = (v, d) => { const a = (Number(v.amt) || 0) / 100; return String(v.cur || 'USD').toUpperCase() === 'USD' ? a : a / (fxKp[d] || 5.4); };
+    const fxKp = {}; for (const d of kpDays) fxKp[d] = await usdBrl(d);
+    // zera vendas/upsells/reembolsos dos dias da KashPay (checkouts e pedidos continuam da Ratoeira)
+    for (const d of kpDays) for (const c of Object.values(out[d])) {
+      Object.assign(c, { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }); delete c.est;
+      for (const b of Object.values(c.byCc || {})) Object.assign(b, { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
+    }
+    const frontDay = {}; // upsell conta no dia da venda front do mesmo cliente
+    for (const v of kp) if (isFrontKp(v) && v.paid) frontDay[pvOf(v)] = brDay(v.paid);
+    const slot = (d, v) => {
+      const cid = String(v.tr?.uc || '').trim(), info = visit[pvOf(v)] || {};
+      const camps = out[d];
+      const c = camps[cid] || (camps[cid] = { p: info.p || PLATFORM, ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, cc: '', byCc: {} });
+      if (info.p) c.p = info.p;
+      const cc = (v.cc || info.cc || c.cc || 'OT').toUpperCase(); if (!c.cc) c.cc = cc;
+      const b = (c.byCc = c.byCc || {})[cc] || (c.byCc[cc] = { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
+      return [c, b];
+    };
+    let n = 0;
+    for (const v of kp) {
+      if (!['paid', 'refunded', 'chargeback'].includes(v.st) || !v.paid) continue;
+      const front = isFrontKp(v);
+      let d = brDay(v.paid);
+      if (!front) { const fd = frontDay[pvOf(v)]; if (fd && fd !== d && out[fd] && fd >= KP_START) d = fd; }
+      if (out[d] && d >= KP_START) {
+        const [c, b] = slot(d, v), usd = usdOf(v, d);
+        if (front) { c.front++; c.frontUsd += usd; b.front++; b.frontUsd += usd; } else { c.ups++; c.upsUsd += usd; b.ups++; b.upsUsd += usd; }
+        n++;
+      }
+      const rd = brDay(v.st === 'chargeback' ? v.cb : v.ref);
+      if ((v.st === 'refunded' || v.st === 'chargeback') && rd && out[rd] && rd >= KP_START) {
+        const [c, b] = slot(rd, v), usd = usdOf(v, rd); c.ref++; c.refUsd += usd; b.ref++; b.refUsd += usd;
+      }
+    }
+    for (const d of kpDays) for (const c of Object.values(out[d])) {
+      for (const k of ['frontUsd', 'upsUsd', 'refUsd']) c[k] = Math.round(c[k] * 100) / 100;
+      for (const [k, b] of Object.entries(c.byCc || {})) { for (const f of ['frontUsd', 'upsUsd', 'refUsd']) b[f] = Math.round(b[f] * 100) / 100; if (!b.front && !b.ups && !b.ref && !b.ic) delete c.byCc[k]; }
+    }
+    console.log(`KashPay: ${n} venda(s)/upsell(s) lançada(s) em ${kpDays.join(', ')}.`);
+  }
+}
 console.log(`Ratoeira: ${checkouts.length} checkouts na janela.`);
 console.log(`Ratoeira: ${sales.length} registros na janela, ${used} usados, ${ignored} de outros tipos ignorados.`);
 const fx = {}; for (const d of days) fx[d] = await usdBrl(d);
@@ -302,7 +366,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       }
     const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null };
     if (prev === JSON.stringify({ camps: next.camps, fx: next.fx })) continue;
-    e.rx = { ...next, at: new Date().toISOString(), src: 'ratoeira' };
+    e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && d >= KP_START ? 'kashpay' : 'ratoeira' };
     data.entries[d] = e; changed++;
     const t = Object.values(camps).reduce((a, c) => ({ f: a.f + c.front, u: a.u + c.ups }), { f: 0, u: 0 });
     const bp = {}; for (const c of Object.values(camps)) bp[c.p] = (bp[c.p] || 0) + c.front;
