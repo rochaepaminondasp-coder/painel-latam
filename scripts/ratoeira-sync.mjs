@@ -356,6 +356,8 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const camps = out[d];
     const e = data.entries[d] || (Object.keys(camps).length ? { rows: [], ads: [], refunds: 0, other: 0, notes: '' } : null);
     if (!e) continue;
+    if (kpSrc && d >= KP_START) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
+      for (const [cid, c] of Object.entries(camps)) { const ad = (e.ads || []).find(a => String(a.cid || '') === cid); if (ad) c.p = ad.p; }
     const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
     if (!icOk && e.rx?.ic) // sem os checkouts agora: mantém os que já estavam
       for (const [cid, o] of Object.entries(e.rx.camps || {})) {
