@@ -358,6 +358,41 @@ if (kpDays.length) {
     console.log(`KashPay: ${n} venda(s)/upsell(s) lançada(s) em ${kpDays.join(', ')}${pend ? ` · ${pend} ainda sem país (aguardando a Ratoeira)` : ''}.`);
   }
 }
+
+/* ---------- dias da KashPay: completa com o financeiro da Ratoeira ----------
+   Só lança provisório quando faltam quantidade E valor (diferença real, não de classificação),
+   na campanha de um pedido criado sem venda; quando o registro de verdade chegar, ele toma o lugar. */
+for (const d of kpDays) {
+  let fin = null;
+  try { fin = await finDay(d); } catch (e) { console.log(`Financeiro da Ratoeira indisponível para ${d} (${e.message.slice(0, 80)}).`); continue; }
+  if (!fin) continue;
+  const camps = out[d], tot = { f: 0, u: 0, fu: 0, uu: 0 };
+  for (const c of Object.values(camps)) { tot.f += c.front; tot.u += c.ups; tot.fu += c.frontUsd; tot.uu += c.upsUsd; }
+  const mf = fin.front - tot.f, mu = fin.ups - tot.u, gf = fin.frontUsd - tot.fu, gu = fin.upsUsd - tot.uu;
+  const addF = mf > 0 && gf > 1 ? mf : 0, addU = mu > 0 && gu > 1 ? mu : 0;
+  if (!addF && !addU) continue;
+  const paidPv = new Set([...kpPv, ...sales.filter(x => FRONT.has(String(x.tipo || '').toUpperCase())).map(x => x.page_view_id)]);
+  const open = sales.filter(x => String(x.tipo || '').toUpperCase() === 'ORDER_CREATED' && localDate(x.created_at) === d && !paidPv.has(x.page_view_id))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const slotP = (cid, p, cc) => {
+    const c = camps[cid] || (camps[cid] = { p, ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, cc, byCc: {} });
+    c.est = 1; c.byCc = c.byCc || {};
+    return [c, c.byCc[cc] || (c.byCc[cc] = { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 })];
+  };
+  const hit = [];
+  for (let i = 0; i < addF; i++) {
+    const o = open[i]; const cid = o ? String(o.campaign_id || '') : '', cc = o ? String(o.pais_sigla || 'OT').toUpperCase().slice(0, 2) : 'OT', p = o ? platformOf(o) : PLATFORM;
+    hit.push([cid, p, cc]);
+    const [c, b] = slotP(cid, p, cc), v = Math.round(gf / addF * 100) / 100;
+    c.front++; c.frontUsd = Math.round((c.frontUsd + v) * 100) / 100; b.front++; b.frontUsd = Math.round((b.frontUsd + v) * 100) / 100;
+  }
+  for (let i = 0; i < addU; i++) {
+    const [cid, p, cc] = hit[i] || ['', PLATFORM, 'OT'];
+    const [c, b] = slotP(cid, p, cc), v = Math.round(gu / addU * 100) / 100;
+    c.ups++; c.upsUsd = Math.round((c.upsUsd + v) * 100) / 100; b.ups++; b.upsUsd = Math.round((b.upsUsd + v) * 100) / 100;
+  }
+  console.log(`Financeiro da Ratoeira (${d}): ${addF} venda(s) e ${addU} upsell(s) ainda sem registro lançados como provisórios.`);
+}
 console.log(`Ratoeira: ${checkouts.length} checkouts na janela.`);
 console.log(`Ratoeira: ${sales.length} registros na janela, ${used} usados, ${ignored} de outros tipos ignorados.`);
 const fx = {}; for (const d of days) fx[d] = await usdBrl(d);
