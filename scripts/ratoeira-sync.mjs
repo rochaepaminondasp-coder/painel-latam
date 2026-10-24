@@ -16,7 +16,7 @@ const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias a
 const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const PLATFORM = process.env.PLATFORM || 'MG';
 const KP_URL = (process.env.KASHPAY_URL || 'https://kashpay-vendas.rochaepaminondasp.workers.dev').replace(/\/$/, '');
-const KP_START = process.env.KP_START || '2026-10-25'; // a partir deste dia as vendas vêm da KashPay
+const KP_START = process.env.KP_START || '2026-10-24'; // a partir deste dia as vendas vêm da KashPay
 const brDay = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? null : ymd(new Date(t + TZ_OFFSET_H * 3600e3)); };
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
@@ -231,7 +231,24 @@ const sales = await fetchSales(from, to);
 // checkouts são muitos registros (muitas páginas): só a cada algumas rodadas (CHECKOUTS=0 pula e mantém os últimos)
 let checkouts = [], icOk = process.env.CHECKOUTS !== '0';
 if (icOk) try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk = false; console.log('Checkouts da Ratoeira indisponíveis agora (' + e.message.slice(0, 120) + ').'); }
-const { out, used, ignored } = aggregate(sales, days, checkouts);
+// vendas da KashPay (webhooks): buscadas antes, para não contar duas vezes a mesma pessoa
+let kpList = null;
+const pvOfKp = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^vSt/, '');
+if (days.some(d => d >= KP_START)) {
+  try {
+    const r = await fetch(`${KP_URL}/vendas?from=${addDays(days[days.length - 1], -2)}&t=${Date.now()}`);
+    if (r.ok) kpList = ((await r.json()).vendas || []).filter(v => v && v.id && !String(v.id).startsWith('test_'));
+  } catch {}
+}
+// a Ratoeira continua valendo para quem NÃO veio pela KashPay (vendas antes do webhook, ou aviso que falhou)
+const kpPv = new Set((kpList || []).map(pvOfKp).filter(Boolean));
+const salesAgg = kpList ? sales.filter(s => {
+  const t = String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
+  if (!FRONT.has(t) && !UPS.has(t) && !REF.has(t)) return true;
+  return !(s.page_view_id && kpPv.has(s.page_view_id) && (localDate(s.created_at) || '') >= KP_START);
+}) : sales;
+if (kpList) console.log(`KashPay: ${kpList.length} venda(s) no receptor · ${sales.length - salesAgg.length} postback(s) da Ratoeira substituído(s) por elas.`);
+const { out, used, ignored } = aggregate(salesAgg, days, checkouts);
 
 /* ---------- conferência com o Dashboard Financeiro da Ratoeira ----------
    A lista de postbacks às vezes demora a registrar uma venda que o financeiro já mostra.
@@ -286,21 +303,18 @@ for (const d of days) {
 if (reconciled) console.log(`Financeiro da Ratoeira: ${reconciled} venda(s)/upsell(s) ainda sem postback lançada(s) como provisória(s).`);
 
 /* ---------- vendas da KashPay (webhooks) ----------
-   A partir de KP_START, front/upsell/reembolso vêm da KashPay (horário real do pagamento), não dos postbacks.
+   A partir de KP_START, front/upsell/reembolso de quem passou pela KashPay vêm dela (horário real do pagamento);
+   os postbacks da Ratoeira só contam para quem não veio pela KashPay.
    Campanha = utm_campaign; plataforma e país = registro da Ratoeira com o mesmo código de visita (vSt…). */
 const kpDays = days.filter(d => d >= KP_START);
 const visUsed = {}; // dia → visitas com país conhecido (guardado em rx.vis)
 let kpSrc = false;
 if (kpDays.length) {
-  let kp = null;
-  try {
-    const r = await fetch(`${KP_URL}/vendas?from=${addDays(kpDays[kpDays.length - 1], -2)}&t=${Date.now()}`);
-    if (r.ok) kp = ((await r.json()).vendas || []).filter(v => v && v.id && !String(v.id).startsWith('test_'));
-  } catch {}
+  const kp = kpList;
   if (!kp) console.log('KashPay indisponível agora — mantendo as vendas da Ratoeira nesta rodada.');
   else {
     kpSrc = true;
-    const pvOf = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^vSt/, '');
+    const pvOf = pvOfKp;
     // código de visita → plataforma e país. Vem da Ratoeira (pedido criado, venda ou checkout) e fica guardado
     // no próprio dia (rx.vis), para a venda não perder o país nas rodadas em que a Ratoeira não traz aquele registro.
     const visit = {};
@@ -309,11 +323,6 @@ if (kpDays.length) {
     const isFrontKp = v => (v.of || []).some(o => /protoc/i.test(o.n || '') && /honey/i.test(o.n || ''));
     const usdOf = (v, d) => { const a = (Number(v.amt) || 0) / 100; return String(v.cur || 'USD').toUpperCase() === 'USD' ? a : a / (fxKp[d] || 5.4); };
     const fxKp = {}; for (const d of kpDays) fxKp[d] = await usdBrl(d);
-    // zera vendas/upsells/reembolsos dos dias da KashPay (checkouts e pedidos continuam da Ratoeira)
-    for (const d of kpDays) for (const c of Object.values(out[d])) {
-      Object.assign(c, { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }); delete c.est;
-      for (const b of Object.values(c.byCc || {})) Object.assign(b, { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 });
-    }
     const frontDay = {}; // upsell conta no dia da venda front do mesmo cliente
     for (const v of kp) if (isFrontKp(v) && v.paid) frontDay[pvOf(v)] = brDay(v.paid);
     const slot = (d, v) => {
