@@ -16,7 +16,7 @@ const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias a
 const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const PLATFORM = process.env.PLATFORM || 'MG';
 const KP_URL = (process.env.KASHPAY_URL || 'https://kashpay-vendas.rochaepaminondasp.workers.dev').replace(/\/$/, '');
-const KP_START = process.env.KP_START || '2099-01-01'; // KashPay desligada como fonte de vendas (só comparação em entry.kp) até descobrirmos por que o webhook não manda todas
+const KP_START = process.env.KP_START || '2026-10-25'; // a partir deste dia vendas/upsells/reembolsos vêm SÓ da KashPay (horário real do pagamento)
 const brDay = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? null : ymd(new Date(t + TZ_OFFSET_H * 3600e3)); };
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
@@ -245,9 +245,9 @@ const kpPv = new Set((kpList || []).map(pvOfKp).filter(Boolean));
 const salesAgg = kpList ? sales.filter(s => {
   const t = String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
   if (!FRONT.has(t) && !UPS.has(t) && !REF.has(t)) return true;
-  return !(s.page_view_id && kpPv.has(s.page_view_id) && (localDate(s.created_at) || '') >= KP_START);
+  return (localDate(s.created_at) || '') < KP_START; // nos dias da KashPay, nenhum postback da Ratoeira conta como venda
 }) : sales;
-if (kpList) console.log(`KashPay: ${kpList.length} venda(s) no receptor · ${sales.length - salesAgg.length} postback(s) da Ratoeira substituído(s) por elas.`);
+if (kpList) console.log(`KashPay: ${kpList.length} venda(s) no receptor · ${sales.length - salesAgg.length} postback(s) da Ratoeira ignorado(s) nos dias da KashPay.`);
 const { out, used, ignored } = aggregate(salesAgg, days, checkouts);
 
 /* ---------- conferência com o Dashboard Financeiro da Ratoeira ----------
@@ -362,7 +362,7 @@ if (kpDays.length) {
 /* ---------- dias da KashPay: completa com o financeiro da Ratoeira ----------
    Só lança provisório quando faltam quantidade E valor (diferença real, não de classificação),
    na campanha de um pedido criado sem venda; quando o registro de verdade chegar, ele toma o lugar. */
-for (const d of kpDays) {
+for (const d of (process.env.KP_FIN === '1' ? kpDays : [])) { // desligado: o financeiro da Ratoeira usa o horário de chegada, não o da compra
   let fin = null;
   try { fin = await finDay(d); } catch (e) { console.log(`Financeiro da Ratoeira indisponível para ${d} (${e.message.slice(0, 80)}).`); continue; }
   if (!fin) continue;
@@ -407,6 +407,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     if (!e) continue;
     if (kpSrc && d >= KP_START) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
       for (const [cid, c] of Object.entries(camps)) { const ad = (e.ads || []).find(a => String(a.cid || '') === cid); if (ad) c.p = ad.p; }
+    if (d >= KP_START && !kpList) continue; // KashPay fora do ar nesta rodada: mantém o que já estava
     const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
     if (!icOk && e.rx?.ic) // sem os checkouts agora: mantém os que já estavam
       for (const [cid, o] of Object.entries(e.rx.camps || {})) {
