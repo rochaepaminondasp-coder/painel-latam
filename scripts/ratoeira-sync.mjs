@@ -237,7 +237,20 @@ const pvOfKp = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^v
 if (days.some(d => d >= KP_START)) {
   try {
     const r = await fetch(`${KP_URL}/vendas?from=${addDays(days[days.length - 1], -2)}&t=${Date.now()}`);
-    if (r.ok) kpList = ((await r.json()).vendas || []).filter(v => v && v.id && !String(v.id).startsWith('test_'));
+    if (r.ok) {
+      const raw = ((await r.json()).vendas || []).filter(v => v && v.id && !String(v.id).startsWith('test_'));
+      // a mesma compra pode chegar como order.paid e como subscription.created (produtos de assinatura):
+      // mesmo cliente + mesmos produtos + mesmo valor + mesmo minuto de pagamento = uma venda só (fica a order.paid)
+      const seen = new Map();
+      for (const v of raw.sort((a, b) => (a.ev === 'order.paid' ? 0 : 1) - (b.ev === 'order.paid' ? 0 : 1))) {
+        const k = [String(v.tr?.sck || ''), (v.of || []).map(o => o.n).sort().join('+'), v.amt, String(v.paid || v.at || '').slice(0, 16)].join('|');
+        const prev = seen.get(k);
+        if (!prev) seen.set(k, v);
+        else if (['refunded', 'chargeback'].includes(v.st) && !['refunded', 'chargeback'].includes(prev.st)) seen.set(k, { ...prev, st: v.st, ref: v.ref, cb: v.cb });
+      }
+      kpList = [...seen.values()];
+      if (raw.length !== kpList.length) console.log(`KashPay: ${raw.length - kpList.length} aviso(s) repetido(s) da mesma compra ignorado(s).`);
+    }
   } catch {}
 }
 // a Ratoeira continua valendo para quem NÃO veio pela KashPay (vendas antes do webhook, ou aviso que falhou)
