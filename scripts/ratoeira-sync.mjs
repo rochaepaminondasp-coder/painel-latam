@@ -16,7 +16,7 @@ const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias a
 const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const PLATFORM = process.env.PLATFORM || 'MG';
 const KP_URL = (process.env.KASHPAY_URL || 'https://kashpay-vendas.rochaepaminondasp.workers.dev').replace(/\/$/, '');
-const KP_START = process.env.KP_START || '2026-10-24'; // a partir deste dia as vendas vêm da KashPay
+const KP_START = process.env.KP_START || '2099-01-01'; // KashPay desligada como fonte de vendas (só comparação em entry.kp) até descobrirmos por que o webhook não manda todas
 const brDay = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? null : ymd(new Date(t + TZ_OFFSET_H * 3600e3)); };
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
