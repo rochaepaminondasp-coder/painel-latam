@@ -239,6 +239,8 @@ if (days.some(d => d >= KP_START)) {
     const r = await fetch(`${KP_URL}/vendas?from=${addDays(days[days.length - 1], -2)}&t=${Date.now()}`);
     if (r.ok) {
       const raw = ((await r.json()).vendas || []).filter(v => v && v.id && !String(v.id).startsWith('test_'));
+      // vendas pagas que o webhook não mandou (antes de ligarmos o evento de assinatura), tiradas da exportação da KashPay
+      try { const fs = await import('node:fs'); raw.push(...JSON.parse(fs.readFileSync(new URL('./kashpay-extra.json', import.meta.url), 'utf8'))); } catch {}
       // a mesma compra pode chegar como order.paid e como subscription.created (produtos de assinatura):
       // mesmo cliente + mesmos produtos + mesmo valor + mesmo minuto de pagamento = uma venda só (fica a order.paid)
       const seen = new Map();
