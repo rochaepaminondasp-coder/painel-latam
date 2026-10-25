@@ -250,6 +250,25 @@ const salesAgg = kpList ? sales.filter(s => {
 if (kpList) console.log(`KashPay: ${kpList.length} venda(s) no receptor · ${sales.length - salesAgg.length} postback(s) da Ratoeira ignorado(s) nos dias da KashPay.`);
 const { out, used, ignored } = aggregate(salesAgg, days, checkouts);
 
+/* ---------- histórico da KashPay (exportação do painel dela) ----------
+   Dias antes de KP_START que estão no arquivo: vendas/upsells vêm da exportação da KashPay
+   (horário real do pagamento, país e campanha de cada venda). Checkouts continuam da Ratoeira. */
+const HIST = await (async () => { try { const fs = await import('node:fs'); return JSON.parse(fs.readFileSync(new URL('./kashpay-hist.json', import.meta.url), 'utf8')); } catch { return {}; } })();
+const guessP = cid => /^5\d{7}$/.test(cid) ? 'TB' : /^12\d{6}$/.test(cid) ? 'MG' : PLATFORM;
+const histDays = days.filter(d => d < KP_START && HIST[d]);
+for (const d of histDays) {
+  const camps = out[d];
+  for (const c of Object.values(camps)) { Object.assign(c, { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }); delete c.est; for (const b of Object.values(c.byCc || {})) Object.assign(b, { front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }); }
+  for (const [cid, h] of Object.entries(HIST[d])) {
+    const c = camps[cid] || (camps[cid] = { p: guessP(cid), ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0, orders: 0, cc: '', byCc: {} });
+    Object.assign(c, { front: h.f, frontUsd: h.fu, ups: h.u, upsUsd: h.uu }); c.byCc = c.byCc || {};
+    for (const [cc, b] of Object.entries(h.cc || {})) Object.assign(c.byCc[cc] || (c.byCc[cc] = { ic: 0, ref: 0, refUsd: 0 }), { front: b.f, frontUsd: b.fu, ups: b.u, upsUsd: b.uu });
+    c.cc = Object.entries(h.cc || {}).sort((a, b) => (b[1].f + b[1].u) - (a[1].f + a[1].u))[0]?.[0] || c.cc;
+  }
+  for (const c of Object.values(camps)) for (const [k, b] of Object.entries(c.byCc || {})) if (!b.front && !b.ups && !b.ref && !b.ic) delete c.byCc[k];
+}
+if (histDays.length) console.log(`KashPay (exportação): vendas de ${histDays.join(', ')} vindas do histórico.`);
+
 /* ---------- conferência com o Dashboard Financeiro da Ratoeira ----------
    A lista de postbacks às vezes demora a registrar uma venda que o financeiro já mostra.
    Se o financeiro tiver mais vendas/upsells no dia, a diferença entra como provisória (est: 1)
@@ -263,7 +282,7 @@ async function finDay(day) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 let reconciled = 0;
 for (const d of days) {
-  if (d >= KP_START) continue; // dias da KashPay não precisam da conferência
+  if (d >= KP_START || HIST[d]) continue; // dias da KashPay (webhook ou exportação) não usam a conferência
   let fin = null;
   try { fin = await finDay(d); } catch (e) { console.log(`Financeiro da Ratoeira indisponível para ${d} (${e.message.slice(0, 80)}).`); continue; }
   if (!fin) continue;
@@ -405,7 +424,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const camps = out[d];
     const e = data.entries[d] || (Object.keys(camps).length ? { rows: [], ads: [], refunds: 0, other: 0, notes: '' } : null);
     if (!e) continue;
-    if (kpSrc && d >= KP_START) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
+    if ((kpSrc && d >= KP_START) || HIST[d]) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
       for (const [cid, c] of Object.entries(camps)) { const ad = (e.ads || []).find(a => String(a.cid || '') === cid); if (ad) c.p = ad.p; }
     if (d >= KP_START && !kpList) continue; // KashPay fora do ar nesta rodada: mantém o que já estava
     const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
@@ -419,7 +438,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null };
     const visNew = kpSrc && d >= KP_START && Object.keys(visUsed[d] || {}).some(k => !(e.rx?.vis || {})[k]);
     if (prev === JSON.stringify({ camps: next.camps, fx: next.fx }) && !visNew) continue;
-    e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && d >= KP_START ? 'kashpay' : 'ratoeira' };
+    e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && d >= KP_START ? 'kashpay' : HIST[d] ? 'kashpay-export' : 'ratoeira' };
     if (kpSrc && d >= KP_START) e.rx.vis = { ...(e.rx.vis || {}), ...(visUsed[d] || {}) }; // países já descobertos
     data.entries[d] = e; changed++;
     const t = Object.values(camps).reduce((a, c) => ({ f: a.f + c.front, u: a.u + c.ups }), { f: 0, u: 0 });
