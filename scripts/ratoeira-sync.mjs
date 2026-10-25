@@ -174,7 +174,7 @@ function aggregate(sales, days, checkouts = []) {
   for (const s of sales) {
     const tipo = tipoOf(s);
     let day = localDate(s.created_at);
-    if (UPS.has(tipo)) {
+    if (UPS.has(tipo) && process.env.UPSELL_NO_DIA_DO_FRONT === '1') { // desligado: tudo conta no dia em que chegou na Ratoeira
       const lead = s.lead_id || s.page_view_id, t = stamp(s);
       const parent = (fronts[lead] || []).filter(f => f.t <= t && t - f.t < 48 * 3600e3).sort((a, b) => b.t - a.t)[0];
       if (parent && parent.day && parent.day !== day) {
