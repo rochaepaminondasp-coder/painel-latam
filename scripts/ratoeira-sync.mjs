@@ -374,7 +374,7 @@ if (kpDays.length) {
       if (!['paid', 'refunded', 'chargeback'].includes(v.st) || !v.paid) continue;
       const front = isFrontKp(v);
       let d = brDay(v.paid);
-      if (!front) { const fd = frontDay[pvOf(v)]; if (fd && fd !== d && out[fd] && fd >= KP_START) d = fd; }
+      // upsell conta no dia em que foi pago (sem mover para o dia do front)
       if (out[d] && d >= KP_START) {
         const [c, b] = slot(d, v), usd = usdOf(v, d);
         if (front) { c.front++; c.frontUsd += usd; b.front++; b.frontUsd += usd; } else { c.ups++; c.upsUsd += usd; b.ups++; b.upsUsd += usd; }
