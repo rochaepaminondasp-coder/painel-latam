@@ -456,6 +456,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     let kfx = null;
     if (d >= '2026-10-12') {
       if (KBRL[d] && usdDay > 0) kfx = Math.round(KBRL[d] / usdDay * 100000) / 100000;
+      else if (KBRL._taxa?.[d]) kfx = KBRL._taxa[d];
       else { const prevDays = Object.keys(data.entries).filter(k => k < d && data.entries[k]?.rx?.kfx).sort(); kfx = e.rx?.kfx ?? (prevDays.length ? data.entries[prevDays.at(-1)].rx.kfx : null); }
     }
     const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null, ...(kfx ? { kfx } : {}) };
