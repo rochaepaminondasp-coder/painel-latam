@@ -268,6 +268,8 @@ const { out, used, ignored } = aggregate(salesAgg, days, checkouts);
 /* ---------- histórico da KashPay (exportação do painel dela) ----------
    Dias antes de KP_START que estão no arquivo: vendas/upsells vêm da exportação da KashPay
    (horário real do pagamento, país e campanha de cada venda). Checkouts continuam da Ratoeira. */
+// R$ que a KashPay mostrou por dia → cotação exata do dia (R$ ÷ US$); dias sem esse número usam a última cotação da KashPay
+const KBRL = await (async () => { try { const fs = await import('node:fs'); return JSON.parse(fs.readFileSync(new URL('./kashpay-brl.json', import.meta.url), 'utf8')); } catch { return {}; } })();
 const HIST = await (async () => { try { const fs = await import('node:fs'); return JSON.parse(fs.readFileSync(new URL('./kashpay-hist.json', import.meta.url), 'utf8')); } catch { return {}; } })();
 const guessP = cid => /^5\d{7}$/.test(cid) ? 'TB' : /^12\d{6}$/.test(cid) ? 'MG' : PLATFORM;
 const histDays = days.filter(d => d < KP_START && HIST[d]);
@@ -442,7 +444,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     if ((kpSrc && d >= KP_START) || HIST[d]) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
       for (const [cid, c] of Object.entries(camps)) { const ad = (e.ads || []).find(a => String(a.cid || '') === cid); if (ad) c.p = ad.p; }
     if (d >= KP_START && !kpList) continue; // KashPay fora do ar nesta rodada: mantém o que já estava
-    const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx } : null);
+    const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx, kfx: e.rx.kfx } : null);
     if (!icOk && e.rx?.ic) // sem os checkouts agora: mantém os que já estavam
       for (const [cid, o] of Object.entries(e.rx.camps || {})) {
         if (!o.ic) continue;
@@ -450,9 +452,15 @@ for (let attempt = 1; attempt <= 5; attempt++) {
         c.ic = o.ic; c.byCc = c.byCc || {};
         for (const [k, b] of Object.entries(o.byCc || {})) if (b.ic) (c.byCc[k] = c.byCc[k] || { ic: 0, front: 0, frontUsd: 0, ups: 0, upsUsd: 0, ref: 0, refUsd: 0 }).ic = b.ic;
       }
-    const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null };
+    const usdDay = Object.values(camps).reduce((a, c) => a + (c.frontUsd || 0) + (c.upsUsd || 0), 0);
+    let kfx = null;
+    if (d >= '2026-10-12') {
+      if (KBRL[d] && usdDay > 0) kfx = Math.round(KBRL[d] / usdDay * 100000) / 100000;
+      else { const prevDays = Object.keys(data.entries).filter(k => k < d && data.entries[k]?.rx?.kfx).sort(); kfx = e.rx?.kfx ?? (prevDays.length ? data.entries[prevDays.at(-1)].rx.kfx : null); }
+    }
+    const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null, ...(kfx ? { kfx } : {}) };
     const visNew = kpSrc && d >= KP_START && Object.keys(visUsed[d] || {}).some(k => !(e.rx?.vis || {})[k]);
-    if (prev === JSON.stringify({ camps: next.camps, fx: next.fx }) && !visNew) continue;
+    if (prev === JSON.stringify({ camps: next.camps, fx: next.fx, kfx: next.kfx }) && !visNew) continue;
     e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && d >= KP_START ? 'kashpay' : HIST[d] ? 'kashpay-export' : 'ratoeira' };
     if (kpSrc && d >= KP_START) e.rx.vis = { ...(e.rx.vis || {}), ...(visUsed[d] || {}) }; // países já descobertos
     data.entries[d] = e; changed++;

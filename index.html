@@ -878,7 +878,7 @@ const activeFields=g=>FIELDS.filter(f=>(!g||f.g===g)&&fOn(f.k));
 /* Vendas vindas da Ratoeira (gravadas pelo robô em entry.rx): viram a fonte oficial das vendas da
    plataforma (front, upsell, reembolsos), por campanha (ID da MGID) e no país em que a campanha está no painel. */
 const fmtAt=s=>{const d=new Date(s);return isNaN(d)?'':pad(d.getDate())+'/'+pad(d.getMonth()+1)+' às '+pad(d.getHours())+':'+pad(d.getMinutes())};
-function rxFx(e,s){s=s||state.settings;if(s.currency==='USD')return 1;return num(s.usdBrl)||num(e&&e.rx&&e.rx.fx)||5.4}
+function rxFx(e,s){s=s||state.settings;if(s.currency==='USD')return 1;return num(e&&e.rx&&e.rx.kfx)||num(s.usdBrl)||num(e&&e.rx&&e.rx.fx)||5.4} // kfx = cotação da própria KashPay no dia
 function applyRx(e,s){
   if(!e||!e.rx||!e.rx.camps)return e;s=s||state.settings;
   // cada campanha da Ratoeira traz a plataforma (c.p); dados antigos usam e.rx.p (MGID)
