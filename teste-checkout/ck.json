@@ -1,0 +1,57 @@
+{
+ "at": "2026-11-04T12:51:08.000Z",
+ "runs": [
+  {
+   "nome": "es-MX",
+   "pronto_ms": 3779,
+   "loc": "{\"country\":\"US\",\"city\":\"Phoenix\",\"region\":\"AZ\",\"postalCode\":\"85003\",\"latitude\":\"33.44838\",\"longitude\":\"-112.07404\"}",
+   "txt": "🧠 Promoción relámpago: US$ 29 hoy\n14:57\nProtocolo Neuro Honey\n\nMX$543.39\n\nO\nTarjeta de Crédito\n\nProtegemos tus datos de pago con encriptación para garantizar seguridad bancaria.\n\nPagar 29,00 US$\n\nAl completar tu compra, aceptas los Términos de uso y la Política de privacidad.",
+   "logs": [
+    "log: [CheckoutLatency] {event: fetch_checkout_start, timestamp: 2026-11-04T12:51:08.871Z, page_perf_ms: 781, slug: checkout-1791485763917}",
+    "log: [Checkout] Captured checkout tracking parameter keys: [src, sck, atomic_src]",
+    "log: [CheckoutLatency] {event: checkout_base_query_done, timestamp: 2026-11-04T12:51:09.235Z, page_perf_ms: 1144, slug: checkout-1791485763917, checkout_id: bcfedff2-9c36-4fee-a1ec-7d7e146f1fe6}",
+    "log: [CheckoutLatency] {event: whop_checkout_domain_routing_done, timestamp: 2026-11-04T12:51:09.236Z, page_perf_ms: 1145, slug: checkout-1791485763917, duration_ms: 0}",
+    "log: [CheckoutLatency] {event: whop_checkout_domain_routing_result, timestamp: 2026-11-04T12:51:09.236Z, page_perf_ms: 1145, payment_provider: stripe, attempts: 0}",
+    "log: [CheckoutLatency] {event: checkout_language_detection_done, timestamp: 2026-11-04T12:51:09.236Z, page_perf_ms: 1146, slug: checkout-1791485763917, duration_ms: 0}",
+    "log: [CheckoutLatency] {event: checkout_public_payload_query_done, timestamp: 2026-11-04T12:51:09.236Z, page_perf_ms: 1146, slug: checkout-1791485763917, product_id: 3373b5f5-bda4-4752-bc3f-14c85537ed35}",
+    "log: [Checkout] Using manual language setting: es",
+    "log: [Checkout] Loaded order bumps: []",
+    "log: [CheckoutLatency] {event: fetch_checkout_done, timestamp: 2026-11-04T12:51:09.237Z, page_perf_ms: 1146, slug: checkout-1791485763917, checkout_id: bcfedff2-9c36-4fee-a1ec-7d7e146f1fe6}",
+    "log: [Checkout] Session tracked",
+    "endGroup: EvalError\n    at https://newassets.hcaptcha.com/c/c62ce9491ee7c4f568d812cedd3f408a7f692ad043a9a93cc6f1d6d45198b32d/hsj.js:2:236753\n    at acC (https://newassets.hcaptcha.com/c/c62ce9491ee7c4f568d812ce",
+    "error: Failed to load resource: the server responded with a status of 401 ()"
+   ],
+   "fails": [
+    "FAIL https://jzrwfrdwgjuarybyegao.supabase.co/rest/v1/checkout_flow_events net::ERR_ABORTED",
+    "FAIL https://64715b3c4e75.w.hcaptcha.com/logo.png net::ERR_ABORTED",
+    "401 https://api.hcaptcha.com/authenticate"
+   ]
+  },
+  {
+   "nome": "es-AR",
+   "pronto_ms": 2651,
+   "loc": "{\"country\":\"US\",\"city\":\"Phoenix\",\"region\":\"AZ\",\"postalCode\":\"85003\",\"latitude\":\"33.44838\",\"longitude\":\"-112.07404\"}",
+   "txt": "🧠 Promoción relámpago: US$ 29 hoy\n14:57\nProtocolo Neuro Honey\n\nARS 44,941.86\n\nO\nTarjeta de Crédito\n\nProtegemos tus datos de pago con encriptación para garantizar seguridad bancaria.\n\nPagar 29,00 US$\n\nAl completar tu compra, aceptas los Términos de uso y la Política de privacidad.",
+   "logs": [
+    "log: [CheckoutLatency] {event: fetch_checkout_start, timestamp: 2026-11-04T12:51:15.725Z, page_perf_ms: 301, slug: checkout-1791485763917}",
+    "log: [Checkout] Captured checkout tracking parameter keys: [src, sck, atomic_src]",
+    "log: [CheckoutLatency] {event: checkout_base_query_done, timestamp: 2026-11-04T12:51:16.025Z, page_perf_ms: 601, slug: checkout-1791485763917, checkout_id: bcfedff2-9c36-4fee-a1ec-7d7e146f1fe6}",
+    "log: [CheckoutLatency] {event: whop_checkout_domain_routing_done, timestamp: 2026-11-04T12:51:16.026Z, page_perf_ms: 602, slug: checkout-1791485763917, duration_ms: 0}",
+    "log: [CheckoutLatency] {event: whop_checkout_domain_routing_result, timestamp: 2026-11-04T12:51:16.026Z, page_perf_ms: 602, payment_provider: stripe, attempts: 0}",
+    "log: [CheckoutLatency] {event: checkout_language_detection_done, timestamp: 2026-11-04T12:51:16.026Z, page_perf_ms: 603, slug: checkout-1791485763917, duration_ms: 0}",
+    "log: [CheckoutLatency] {event: checkout_public_payload_query_done, timestamp: 2026-11-04T12:51:16.027Z, page_perf_ms: 603, slug: checkout-1791485763917, product_id: 3373b5f5-bda4-4752-bc3f-14c85537ed35}",
+    "log: [Checkout] Using manual language setting: es",
+    "log: [Checkout] Loaded order bumps: []",
+    "log: [CheckoutLatency] {event: fetch_checkout_done, timestamp: 2026-11-04T12:51:16.027Z, page_perf_ms: 603, slug: checkout-1791485763917, checkout_id: bcfedff2-9c36-4fee-a1ec-7d7e146f1fe6}",
+    "log: [Checkout] Session tracked",
+    "endGroup: EvalError\n    at https://newassets.hcaptcha.com/c/c62ce9491ee7c4f568d812cedd3f408a7f692ad043a9a93cc6f1d6d45198b32d/hsj.js:2:236753\n    at acC (https://newassets.hcaptcha.com/c/c62ce9491ee7c4f568d812ce",
+    "error: Failed to load resource: the server responded with a status of 401 ()"
+   ],
+   "fails": [
+    "FAIL https://jzrwfrdwgjuarybyegao.supabase.co/rest/v1/checkout_flow_events net::ERR_ABORTED",
+    "FAIL https://8bdc5ccd3f10.w.hcaptcha.com/logo.png net::ERR_ABORTED",
+    "401 https://api.hcaptcha.com/authenticate"
+   ]
+  }
+ ]
+}
