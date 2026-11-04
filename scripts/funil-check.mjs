@@ -1,9 +1,12 @@
 // Diagnóstico do funil: pega as URLs dos anúncios ativos da Taboola, abre cada página (como celular),
 // segue até 2 níveis procurando links de checkout e grava o resultado em funil.json (branch dados).
 const BASE = 'https://backstage.taboola.com/backstage';
-const { TABOOLA_CLIENT_ID: CID, TABOOLA_CLIENT_SECRET: SECRET, TABOOLA_ACCOUNT_ID: ACC, GITHUB_TOKEN: GH, GITHUB_REPOSITORY: REPO } = process.env;
+const E = k => String(process.env[k] || '').trim();
+const CID = E('TABOOLA_CLIENT_ID'), SECRET = E('TABOOLA_CLIENT_SECRET'), ACC = E('TABOOLA_ACCOUNT_ID'), GH = E('GITHUB_TOKEN'), REPO = E('GITHUB_REPOSITORY');
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
-const tok = (await (await fetch(`${BASE}/oauth/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: new URLSearchParams({ client_id: CID, client_secret: SECRET, grant_type: 'client_credentials' }) })).json()).access_token;
+const tr = await fetch(`${BASE}/oauth/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: new URLSearchParams({ client_id: CID, client_secret: SECRET, grant_type: 'client_credentials' }) });
+const ttx = await tr.text(); let tok; try { tok = JSON.parse(ttx).access_token; } catch {}
+if (!tok) console.error('token Taboola:', tr.status, ttx.slice(0, 200), 'cid?', !!CID, 'secret?', !!SECRET);
 const api = async p => (await fetch(`${BASE}/api/1.0/${p}`, { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/json' } })).json();
 if (!tok) { console.error('sem token da Taboola'); process.exit(1); }
 const camps = ((await api(`${ACC}/campaigns/`)).results || []).filter(c => c.is_active && c.status === 'RUNNING');
