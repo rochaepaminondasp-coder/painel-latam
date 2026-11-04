@@ -1,6 +1,7 @@
 {
+ "raw": "{\"http_status\":403,\"message\":\"Requested action is forbidden\",\"message_code\":\"api.action.forbidden\"}",
  "itemStatus": [],
- "at": "2026-11-04T11:58:13.639Z",
+ "at": "2026-11-04T11:58:46.801Z",
  "campanhas": 17,
  "anuncios": 0,
  "paginas": {},
