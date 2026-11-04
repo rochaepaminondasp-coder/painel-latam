@@ -1,0 +1,24 @@
+name: Teste do checkout (fora do Brasil)
+on:
+  workflow_dispatch:
+    inputs:
+      url: { required: true }
+permissions: { contents: write }
+jobs:
+  shot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm i playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: node scripts/ck-shot.mjs
+        env: { CK_URL: "${{ inputs.url }}" }
+      - name: Gravar resultado na branch dados
+        run: |
+          mkdir -p /tmp/o && cp ck.json ck-*.png /tmp/o/
+          git fetch -q origin dados && git checkout -q dados
+          mkdir -p teste-checkout && cp /tmp/o/* teste-checkout/
+          git config user.name "painel-bot" && git config user.email "painel-bot@users.noreply.github.com"
+          git add teste-checkout && git commit -qm "Teste do checkout" && git push -q origin dados
