@@ -15,10 +15,13 @@ for (const [nome, locale, tz] of [['es-MX', 'es-MX', 'America/Mexico_City'], ['e
   await p.goto(URL_CK + '?src=vStteste&sck=vStteste', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(e => logs.push('goto ' + e.message));
   try { await p.waitForSelector('text=/Pagar|Pay/', { timeout: 45000 }); pronto = Date.now() - t0; } catch {}
   await p.waitForTimeout(3000);
+  await p.waitForTimeout(5000);
+  const frames = [];
+  for (const f of p.frames()) { if (!/elements-inner-card/.test(f.url())) continue; try { frames.push(await f.evaluate(() => [...document.querySelectorAll('input')].map(i => (i.name || '') + ':' + (i.placeholder || '') + ':' + (i.disabled ? 'off' : 'on')).join(','))); } catch (e) { frames.push('erro ' + e.message.slice(0, 80)); } }
   const loc = await p.evaluate(() => fetch('/api/request-location').then(r => r.text()).catch(e => String(e)));
   const txt = (await p.innerText('body').catch(() => '')).slice(0, 600);
   await p.screenshot({ path: `ck-${nome}.png`, fullPage: true });
-  out.runs.push({ nome, pronto_ms: pronto, loc, txt, logs: logs.slice(0, 40), fails: fails.slice(0, 30) });
+  out.runs.push({ frames, nome, pronto_ms: pronto, loc, txt, logs: logs.slice(0, 40), fails: fails.slice(0, 30) });
   await ctx.close();
 }
 await b.close();
