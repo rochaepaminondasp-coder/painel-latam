@@ -12,12 +12,13 @@ if (!tok) { console.error('sem token da Taboola'); process.exit(1); }
 const camps = ((await api(`${ACC}/campaigns/`)).results || []).filter(c => c.is_active && c.status === 'RUNNING');
 const ads = [], out0 = { st: [] };
 for (const c of camps) {
-  const items = ((await api(`${ACC}/campaigns/${c.id}/items/`)).results || []);
+  const raw = await api(`${ACC}/campaigns/${c.id}/items/`); if (!out0.raw) out0.raw = JSON.stringify(raw).slice(0, 600);
+  const items = raw.results || [];
   out0.st.push(...items.map(i => i.status + '/' + i.is_active + '/' + (i.approval_state || '')));
   for (const i of items.filter(i => i.is_active !== false && i.url && !/PAUSED|REJECTED|STOPPED/.test(i.status || '')))
   ads.push({ camp: c.id, name: c.name, url: i.url });
 }
-const out = { itemStatus: [...new Set(out0.st)], at: new Date().toISOString(), campanhas: camps.length, anuncios: ads.length, paginas: {}, checkouts: {} };
+const out = { raw: out0.raw, itemStatus: [...new Set(out0.st)], at: new Date().toISOString(), campanhas: camps.length, anuncios: ads.length, paginas: {}, checkouts: {} };
 const seen = new Set();
 async function open(url) {
   const t0 = Date.now();
