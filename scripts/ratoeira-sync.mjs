@@ -234,7 +234,8 @@ if (icOk) try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk =
 // vendas da KashPay (webhooks): buscadas antes, para não contar duas vezes a mesma pessoa
 let kpList = null;
 const pvOfKp = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^vSt/, '');
-if (days.some(d => d >= KP_START)) {
+// KP_PULAR=1: nesta rodada não consulta o receptor (poupa o limite diário de leituras da Cloudflare)
+if (process.env.KP_PULAR !== '1' && days.some(d => d >= KP_START)) {
   try {
     const r = await fetch(`${KP_URL}/vendas?from=${addDays(days[days.length - 1], -2)}&t=${Date.now()}`);
     if (r.ok) {
