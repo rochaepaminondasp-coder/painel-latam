@@ -227,7 +227,11 @@ const days = [today]; for (let i = 1; i <= DAYS; i++) days.push(addDays(today, -
 const from = addDays(days[days.length - 1], -1), to = today; // janela folgada; o dia certo vem do horário de cada venda
 console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
 
-const sales = await fetchSales(from, to);
+// POSTBACKS=0: não consulta os postbacks da Ratoeira nesta rodada (nos dias da KashPay eles só servem para país/plataforma,
+// que também vêm dos checkouts e ficam guardados) — assim as vendas da KashPay não esperam a Ratoeira quando ela está lenta.
+const allKp = days.every(d => d >= KP_START);
+const sales = (process.env.POSTBACKS === '0' && allKp) ? [] : await fetchSales(from, to);
+if (!sales.length && process.env.POSTBACKS === '0' && allKp) console.log('Ratoeira: postbacks pulados nesta rodada.');
 // checkouts são muitos registros (muitas páginas): só a cada algumas rodadas (CHECKOUTS=0 pula e mantém os últimos)
 let checkouts = [], icOk = process.env.CHECKOUTS !== '0';
 if (icOk) try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk = false; console.log('Checkouts da Ratoeira indisponíveis agora (' + e.message.slice(0, 120) + ').'); }

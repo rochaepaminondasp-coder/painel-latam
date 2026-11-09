@@ -61,7 +61,8 @@ jobs:
             CK=0; [ $(( (i - 1) % 4 )) -eq 0 ] && CK=1   # checkouts a cada ~16 min (poupa o limite da Ratoeira)
             # vendas da KashPay: rodadas alternadas (~8 min) para caber no limite gratuito da Cloudflare (1.000 listagens/dia)
             KP=0; [ $(( i % 2 )) -eq 0 ] && KP=1; [ "$MODE" = "once" ] && KP=0
-            DAYS=$D CHECKOUTS=$CK KP_PULAR=$KP node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
+            PB=$CK; [ "$MODE" = "once" ] && PB=0   # postbacks da Ratoeira só junto com os checkouts (~16 min); a atualização manual não espera por eles
+            DAYS=$D CHECKOUTS=$CK POSTBACKS=$PB KP_PULAR=$KP node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
             echo "::endgroup::"
             [ "$i" -lt "$rounds" ] && sleep 230
           done
