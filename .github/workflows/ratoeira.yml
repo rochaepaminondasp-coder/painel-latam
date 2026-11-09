@@ -50,7 +50,10 @@ jobs:
         run: |
           rounds=1; [ "$MODE" = "loop" ] && rounds=12
           fails=0
+          inicio=$(date +%s)
           for i in $(seq 1 $rounds); do
+            # para antes do limite de 58 min do GitHub, para sempre dar tempo de chamar a próxima rodada
+            [ $(( $(date +%s) - inicio )) -gt 2700 ] && { echo "Tempo da rodada esgotado; passando para a próxima corrente."; break; }
             # uma vez por dia (06h de Brasília) revisa os últimos 4 dias, para pegar reembolsos atrasados
             D=$DAYS_IN; [ "$(date -u +%H)" = "09" ] && [ "$i" = "1" ] && D=4
             echo "::group::Rodada $i/$rounds · $(TZ=America/Fortaleza date +%H:%M) · dias=$D"
@@ -64,7 +67,7 @@ jobs:
             PB=$CK; [ "$MODE" = "once" ] && PB=0   # postbacks da Ratoeira só junto com os checkouts (~16 min); a atualização manual não espera por eles
             DAYS=$D CHECKOUTS=$CK POSTBACKS=$PB KP_PULAR=$KP node scripts/ratoeira-sync.mjs || { echo "::warning::Ratoeira falhou na rodada $i"; fails=$((fails+1)); }
             echo "::endgroup::"
-            [ "$i" -lt "$rounds" ] && sleep 230
+            [ "$i" -lt "$rounds" ] && sleep 230 || true
           done
           echo "Falhas: $fails"
       - name: Chamar a próxima rodada
