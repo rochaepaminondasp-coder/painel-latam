@@ -1,0 +1,13 @@
+name: Conferir receptor KashPay
+on: { workflow_dispatch: { inputs: { de: { required: true } } } }
+jobs:
+  ver:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s "https://kashpay-vendas.rochaepaminondasp.workers.dev/vendas?from=${{ inputs.de }}" > v.json
+          node -e '
+          const j=JSON.parse(require("fs").readFileSync("v.json"));const br=x=>new Date(Date.parse(x)-3*3600e3).toISOString();
+          const isF=x=>(x.of||[]).some(o=>/protoc/i.test(o.n)&&/honey/i.test(o.n));
+          const by={};for(const v of j.vendas){if(v.st!=="paid")continue;const t=br(v.paid||v.at);const d=t.slice(0,10);const o=by[d]||(by[d]={f:0,u:0,usd:0,horas:[]});isF(v)?o.f++:o.u++;o.usd+=v.amt/100;o.horas.push(t.slice(11,16)+(isF(v)?"F":"U"))}
+          for(const [d,o] of Object.entries(by).sort())console.log("RESUMO",d,"front",o.f,"ups",o.u,"usd",o.usd,"|",o.horas.sort().join(" "))'
