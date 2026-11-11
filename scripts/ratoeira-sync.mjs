@@ -16,7 +16,9 @@ const DAYS = Math.max(0, Math.min(10, Number(process.env.DAYS ?? 1))); // dias a
 const BRANCH = process.env.DATA_BRANCH || 'dados'; // galho onde fica o data.json do painel
 const PLATFORM = process.env.PLATFORM || 'MG';
 const KP_URL = (process.env.KASHPAY_URL || 'https://kashpay-vendas.rochaepaminondasp.workers.dev').replace(/\/$/, '');
-const KP_START = process.env.KP_START || '2026-10-25'; // a partir deste dia vendas/upsells/reembolsos vêm SÓ da KashPay (horário real do pagamento)
+const KP_START = process.env.KP_START || '2026-10-25'; // de KP_START a KP_END vendas/upsells/reembolsos vêm SÓ da KashPay (horário real do pagamento)
+const KP_END = process.env.KP_END || '2026-11-10'; // a partir de 11/11 o checkout mudou: vendas voltam a vir 100% da Ratoeira
+const isKP = d => !!d && d >= KP_START && d <= KP_END;
 const brDay = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? null : ymd(new Date(t + TZ_OFFSET_H * 3600e3)); };
 const GH_API = process.env.GITHUB_API || 'https://api.github.com';
 const FX_API = process.env.FX_API || 'https://economia.awesomeapi.com.br/json/daily/USD-BRL/1';
@@ -229,7 +231,7 @@ console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
 
 // POSTBACKS=0: não consulta os postbacks da Ratoeira nesta rodada (nos dias da KashPay eles só servem para país/plataforma,
 // que também vêm dos checkouts e ficam guardados) — assim as vendas da KashPay não esperam a Ratoeira quando ela está lenta.
-const allKp = days.every(d => d >= KP_START);
+const allKp = days.every(isKP);
 const sales = (process.env.POSTBACKS === '0' && allKp) ? [] : await fetchSales(from, to);
 if (!sales.length && process.env.POSTBACKS === '0' && allKp) console.log('Ratoeira: postbacks pulados nesta rodada.');
 // checkouts são muitos registros (muitas páginas): só a cada algumas rodadas (CHECKOUTS=0 pula e mantém os últimos)
@@ -239,7 +241,7 @@ if (icOk) try { checkouts = await fetchCheckouts(from, to); } catch (e) { icOk =
 let kpList = null;
 const pvOfKp = v => String(v.tr?.sck || v.tr?.ref || v.tr?.um || '').replace(/^vSt/, '');
 // KP_PULAR=1: nesta rodada não consulta o receptor (poupa o limite diário de leituras da Cloudflare)
-if (process.env.KP_PULAR !== '1' && days.some(d => d >= KP_START)) {
+if (process.env.KP_PULAR !== '1' && days.some(isKP)) {
   try {
     const r = await fetch(`${KP_URL}/vendas?from=${addDays(days[days.length - 1], -2)}&t=${Date.now()}`);
     if (r.ok) {
@@ -265,7 +267,7 @@ const kpPv = new Set((kpList || []).map(pvOfKp).filter(Boolean));
 const salesAgg = kpList ? sales.filter(s => {
   const t = String(s.tipo || '').toUpperCase().replace(/\s+/g, '_');
   if (!FRONT.has(t) && !UPS.has(t) && !REF.has(t)) return true;
-  return (localDate(s.created_at) || '') < KP_START; // nos dias da KashPay, nenhum postback da Ratoeira conta como venda
+  return !isKP(localDate(s.created_at) || ''); // nos dias da KashPay, nenhum postback da Ratoeira conta como venda
 }) : sales;
 if (kpList) console.log(`KashPay: ${kpList.length} venda(s) no receptor · ${sales.length - salesAgg.length} postback(s) da Ratoeira ignorado(s) nos dias da KashPay.`);
 const { out, used, ignored } = aggregate(salesAgg, days, checkouts);
@@ -304,7 +306,7 @@ async function finDay(day) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 let reconciled = 0;
 for (const d of days) {
-  if (d >= KP_START || HIST[d]) continue; // dias da KashPay (webhook ou exportação) não usam a conferência
+  if (isKP(d) || HIST[d]) continue; // dias da KashPay (webhook ou exportação) não usam a conferência
   let fin = null;
   try { fin = await finDay(d); } catch (e) { console.log(`Financeiro da Ratoeira indisponível para ${d} (${e.message.slice(0, 80)}).`); continue; }
   if (!fin) continue;
@@ -347,7 +349,7 @@ if (reconciled) console.log(`Financeiro da Ratoeira: ${reconciled} venda(s)/upse
    A partir de KP_START, front/upsell/reembolso de quem passou pela KashPay vêm dela (horário real do pagamento);
    os postbacks da Ratoeira só contam para quem não veio pela KashPay.
    Campanha = utm_campaign; plataforma e país = registro da Ratoeira com o mesmo código de visita (vSt…). */
-const kpDays = days.filter(d => d >= KP_START);
+const kpDays = days.filter(isKP);
 const visUsed = {}; // dia → visitas com país conhecido (guardado em rx.vis)
 let kpSrc = false;
 if (kpDays.length) {
@@ -382,13 +384,13 @@ if (kpDays.length) {
       const front = isFrontKp(v);
       let d = brDay(v.paid);
       // upsell conta no dia em que foi pago (sem mover para o dia do front)
-      if (out[d] && d >= KP_START) {
+      if (out[d] && isKP(d)) {
         const [c, b] = slot(d, v), usd = usdOf(v, d);
         if (front) { c.front++; c.frontUsd += usd; b.front++; b.frontUsd += usd; } else { c.ups++; c.upsUsd += usd; b.ups++; b.upsUsd += usd; }
         n++;
       }
       const rd = brDay(v.st === 'chargeback' ? v.cb : v.ref);
-      if ((v.st === 'refunded' || v.st === 'chargeback') && rd && out[rd] && rd >= KP_START) {
+      if ((v.st === 'refunded' || v.st === 'chargeback') && rd && out[rd] && isKP(rd)) {
         const [c, b] = slot(rd, v), usd = usdOf(v, rd); c.ref++; c.refUsd += usd; b.ref++; b.refUsd += usd;
       }
     }
@@ -446,9 +448,9 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     const camps = out[d];
     const e = data.entries[d] || (Object.keys(camps).length ? { rows: [], ads: [], refunds: 0, other: 0, notes: '' } : null);
     if (!e) continue;
-    if ((kpSrc && d >= KP_START) || HIST[d]) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
+    if ((kpSrc && isKP(d)) || HIST[d]) // plataforma pela própria campanha (IDs vindos das APIs da MGID e da Taboola)
       for (const [cid, c] of Object.entries(camps)) { const ad = (e.ads || []).find(a => String(a.cid || '') === cid); if (ad) c.p = ad.p; }
-    if (d >= KP_START && !kpList) continue; // KashPay fora do ar nesta rodada: mantém o que já estava
+    if (isKP(d) && !kpList) continue; // KashPay fora do ar nesta rodada: mantém o que já estava
     const prev = JSON.stringify(e.rx ? { camps: e.rx.camps, fx: e.rx.fx, kfx: e.rx.kfx } : null);
     if (!icOk && e.rx?.ic) // sem os checkouts agora: mantém os que já estavam
       for (const [cid, o] of Object.entries(e.rx.camps || {})) {
@@ -459,16 +461,16 @@ for (let attempt = 1; attempt <= 5; attempt++) {
       }
     const usdDay = Object.values(camps).reduce((a, c) => a + (c.frontUsd || 0) + (c.upsUsd || 0), 0);
     let kfx = null;
-    if (d >= '2026-10-12') {
+    if (d >= '2026-10-12' && d <= KP_END) { // cotação da KashPay só nos dias em que as vendas vinham dela
       if (KBRL[d] && usdDay > 0) kfx = Math.round(KBRL[d] / usdDay * 100000) / 100000;
       else if (KBRL._taxa?.[d]) kfx = KBRL._taxa[d];
       else { const prevDays = Object.keys(data.entries).filter(k => k < d && data.entries[k]?.rx?.kfx).sort(); kfx = e.rx?.kfx ?? (prevDays.length ? data.entries[prevDays.at(-1)].rx.kfx : null); }
     }
     const next = { p: PLATFORM, ps: ['MG', 'TB'], ic: icOk || !!e.rx?.ic, camps, fx: fx[d] ?? e.rx?.fx ?? null, ...(kfx ? { kfx } : {}) };
-    const visNew = kpSrc && d >= KP_START && Object.keys(visUsed[d] || {}).some(k => !(e.rx?.vis || {})[k]);
+    const visNew = kpSrc && isKP(d) && Object.keys(visUsed[d] || {}).some(k => !(e.rx?.vis || {})[k]);
     if (prev === JSON.stringify({ camps: next.camps, fx: next.fx, kfx: next.kfx }) && !visNew) continue;
-    e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && d >= KP_START ? 'kashpay' : HIST[d] ? 'kashpay-export' : 'ratoeira' };
-    if (kpSrc && d >= KP_START) e.rx.vis = { ...(e.rx.vis || {}), ...(visUsed[d] || {}) }; // países já descobertos
+    e.rx = { ...next, at: new Date().toISOString(), src: kpSrc && isKP(d) ? 'kashpay' : HIST[d] ? 'kashpay-export' : 'ratoeira' };
+    if (kpSrc && isKP(d)) e.rx.vis = { ...(e.rx.vis || {}), ...(visUsed[d] || {}) }; // países já descobertos
     data.entries[d] = e; changed++;
     const t = Object.values(camps).reduce((a, c) => ({ f: a.f + c.front, u: a.u + c.ups }), { f: 0, u: 0 });
     const bp = {}; for (const c of Object.values(camps)) bp[c.p] = (bp[c.p] || 0) + c.front;
