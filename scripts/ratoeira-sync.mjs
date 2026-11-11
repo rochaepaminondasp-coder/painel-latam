@@ -233,6 +233,12 @@ console.log(`Atualizando vendas de ${days.slice().reverse().join(', ')} …`);
 // que também vêm dos checkouts e ficam guardados) — assim as vendas da KashPay não esperam a Ratoeira quando ela está lenta.
 const allKp = days.every(isKP);
 const sales = (process.env.POSTBACKS === '0' && allKp) ? [] : await fetchSales(from, to);
+// checkout novo (a partir de 11/11) entra na Ratoeira como plataforma genérica: pode marcar tudo como venda.
+// Garantia: só "Protocolo NeuroHoney" é front; os demais produtos (Acelerador, Sellador, Soporte VIP…) contam como upsell.
+for (const s of sales) {
+  const t = String(s.tipo || '').toUpperCase(), nome = String(s.produto || '');
+  if (!isKP(localDate(s.created_at) || '') && ['SALE', 'APPROVED', 'PURCHASE', 'COMPLETE', 'PAID'].includes(t) && nome && !(/protoc/i.test(nome) && /honey/i.test(nome))) s.tipo = 'UPSELL';
+}
 if (!sales.length && process.env.POSTBACKS === '0' && allKp) console.log('Ratoeira: postbacks pulados nesta rodada.');
 // checkouts são muitos registros (muitas páginas): só a cada algumas rodadas (CHECKOUTS=0 pula e mantém os últimos)
 let checkouts = [], icOk = process.env.CHECKOUTS !== '0';
