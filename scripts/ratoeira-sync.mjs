@@ -79,7 +79,7 @@ function toolJson(result) {
 }
 // O MCP da Ratoeira corta cada resposta em ~25 mil caracteres: pedimos páginas pequenas,
 // só dos tipos que interessam, e diminuímos a página se ainda assim vier cortada.
-const TIPOS = ['SALE', 'UPSELL', 'REFUND', 'CHARGEBACK', 'ORDER_CREATED'];
+const TIPOS = ['SALE', 'UPSELL', 'REFUND', 'ORDER_CREATED']; // sem CHARGEBACK: chargebacks ficam fora do painel
 let mcpReady = false;
 async function fetchList(tool, from, to, extra = {}, limit = 12) {
   if (!mcpReady) {
@@ -161,7 +161,8 @@ function platformOf(s) {
 }
 const FRONT = new Set(['SALE', 'APPROVED', 'PURCHASE', 'COMPLETE', 'PAID']);
 const UPS = new Set(['UPSELL', 'ORDER_BUMP', 'ORDERBUMP', 'BUMP', 'DOWNSELL', 'CROSS_SELL', 'CROSSSELL']);
-const REF = new Set(['REFUND', 'REFUNDED', 'CHARGEBACK', 'CHARGEDBACK', 'REEMBOLSO']);
+// chargebacks NÃO entram no painel (pedido do dono: 15/11); só reembolsos descontam
+const REF = new Set(['REFUND', 'REFUNDED', 'REEMBOLSO']);
 function aggregate(sales, days, checkouts = []) {
   const out = {}; days.forEach(d => (out[d] = {}));
   let used = 0, ignored = 0, moved = 0;
@@ -395,8 +396,8 @@ if (kpDays.length) {
         if (front) { c.front++; c.frontUsd += usd; b.front++; b.frontUsd += usd; } else { c.ups++; c.upsUsd += usd; b.ups++; b.upsUsd += usd; }
         n++;
       }
-      const rd = brDay(v.st === 'chargeback' ? v.cb : v.ref);
-      if ((v.st === 'refunded' || v.st === 'chargeback') && rd && out[rd] && isKP(rd)) {
+      const rd = brDay(v.ref);
+      if (v.st === 'refunded' && rd && out[rd] && isKP(rd)) { // chargebacks ficam fora do painel
         const [c, b] = slot(rd, v), usd = usdOf(v, rd); c.ref++; c.refUsd += usd; b.ref++; b.refUsd += usd;
       }
     }
