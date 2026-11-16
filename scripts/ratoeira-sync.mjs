@@ -41,6 +41,7 @@ function localDate(createdAt) {
 }
 
 /* ---------- cliente MCP (HTTP streamable) ---------- */
+const CACHE_SS = String(new Date().getUTCMinutes()).padStart(2, '0');
 let sessionId = null, rpcId = 0;
 async function mcp(method, params, notify = false) {
   const body = { jsonrpc: '2.0', method, params };
@@ -90,7 +91,7 @@ async function fetchList(tool, from, to, extra = {}, limit = 12) {
   let page = 1, total = null, calls = 0;
   while (calls++ < 400) {
     const res = await mcp('tools/call', { name: tool, arguments: {
-      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:59`, timezone: 'America/Sao_Paulo', ...extra, format: 'json', page, limit } });
+      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:${CACHE_SS}` /* segundo variável: fura o cache de 10 min da Ratoeira */, timezone: 'America/Sao_Paulo', ...extra, format: 'json', page, limit } });
     let j;
     try { j = toolJson(res); }
     catch (err) {
