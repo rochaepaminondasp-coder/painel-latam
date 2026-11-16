@@ -91,7 +91,7 @@ async function fetchList(tool, from, to, extra = {}, limit = 12) {
   let page = 1, total = null, calls = 0;
   while (calls++ < 400) {
     const res = await mcp('tools/call', { name: tool, arguments: {
-      data_inicio: `${from} 00:00:00`, data_fim: `${to} 23:59:${CACHE_SS}` /* segundo variável: fura o cache de 10 min da Ratoeira */, timezone: 'America/Sao_Paulo', ...extra, format: 'json', page, limit } });
+      data_inicio: `${from} 00:00:00`, data_fim: `${addDays(to, 1)} 02:59:${CACHE_SS}` /* a Ratoeira lê as datas em UTC: +3h cobre até 23:59 de Brasília; o segundo variável fura o cache de 10 min */, timezone: 'America/Sao_Paulo', ...extra, format: 'json', page, limit } });
     let j;
     try { j = toolJson(res); }
     catch (err) {
