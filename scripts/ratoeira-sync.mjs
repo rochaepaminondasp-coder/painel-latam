@@ -9,6 +9,7 @@
 //   PLATFORM          código da plataforma no painel (padrão MG = MGID)
 //   GITHUB_API / FX_API  só para testes
 
+import { abrirDados, fecharDados } from './cripto.mjs';
 const MCP_URL = process.env.RATOEIRA_MCP_URL;
 const GH_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = process.env.GITHUB_REPOSITORY;
@@ -140,10 +141,10 @@ async function getData() {
   if (r.status === 404) return { data: { v: 3, settings: {}, entries: {}, demo: false }, sha: null };
   if (!r.ok) throw new Error('GitHub GET data.json: HTTP ' + r.status);
   const j = await r.json();
-  return { data: JSON.parse(Buffer.from(j.content, 'base64').toString('utf8')), sha: j.sha };
+  return { data: abrirDados(j.content), sha: j.sha };
 }
 async function putData(data, sha, message) {
-  const body = { message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: BRANCH };
+  const body = { message, content: fecharDados(data), branch: BRANCH };
   if (sha) body.sha = sha;
   const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify(body) });
   return r.status;

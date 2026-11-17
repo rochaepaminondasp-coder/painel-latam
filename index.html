@@ -455,6 +455,12 @@ body:not(.viewer) .view-only{display:none!important}
   .top .sync{padding:10px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+#cadeado{position:fixed;inset:0;z-index:9999;background:var(--bg);display:grid;place-items:center;padding:24px}
+#cadeado form{width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:28px 22px;text-align:center;box-shadow:var(--shadow);display:grid;gap:12px}
+#cadeado .cad-ico{font-size:34px}#cadeado h2{margin:0;font-size:20px}#cadeado p{margin:0;color:var(--muted);font-size:14px}
+#cadeado input{font:inherit;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);background:var(--card2);color:var(--text);font-size:16px}
+#cadeado .cad-err{color:var(--loss);font-size:13px;min-height:16px}#cadeado .cad-obs{font-size:12px;color:var(--faint)}
+body.trancado>*:not(#cadeado){visibility:hidden}
 </style>
 </head>
 <body>
@@ -672,7 +678,7 @@ body:not(.viewer) .view-only{display:none!important}
     </div>
   </section>
 
-  <footer>Painel LATAM · <span id="footMode"></span></footer>
+  <footer>Painel LATAM · <span id="footMode"></span> · <a href="#" class="muted" onclick="trancarAparelho();return false">trancar este aparelho</a></footer>
 </main>
 
 <button class="fab edit-only" id="fab" aria-label="Lançar dia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -1871,14 +1877,47 @@ const apiUrl=()=>`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/$
 function ghHeaders(json){const h={'Accept':'application/vnd.github+json'};const t=getToken();if(t)h.Authorization='Bearer '+t;if(json)h['Content-Type']='application/json';return h}
 function b64dec(s){const bin=atob(s.replace(/\s/g,''));return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))}
 function b64enc(str){const bytes=new TextEncoder().encode(str);let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(bin)}
+/* ---- senha do painel: o data.json fica criptografado (AES-GCM, chave derivada da senha com PBKDF2) ---- */
+const LS_CHAVE='painel-latam-chave';
+const u8b64=u=>{let b='';for(let i=0;i<u.length;i+=0x8000)b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(b)};
+const b64u8=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function derivarChave(senha,salt,it){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(senha),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64u8(salt),iterations:it||200000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},true,['encrypt','decrypt'])}
+async function chaveSalva(salt){try{const j=JSON.parse(localStorage.getItem(LS_CHAVE)||'null');if(!j||j.salt!==salt)return null;return crypto.subtle.importKey('raw',b64u8(j.k),'AES-GCM',true,['encrypt','decrypt'])}catch(e){return null}}
+async function guardarChave(salt,key){try{const raw=new Uint8Array(await crypto.subtle.exportKey('raw',key));localStorage.setItem(LS_CHAVE,JSON.stringify({salt,k:u8b64(raw)}))}catch(e){}}
+async function decifrar(obj,key){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64u8(obj.iv)},key,b64u8(obj.ct));return JSON.parse(new TextDecoder().decode(pt))}
+sync.enc=null;
+async function abrirDados(obj){
+  if(!obj||!obj.enc){sync.enc=null;return obj}
+  const key=await chaveSalva(obj.salt);
+  if(key){try{const d=await decifrar(obj,key);sync.enc={salt:obj.salt,it:obj.it,key};return d}catch(e){}}
+  const err=new Error('senha');err.lock=obj;throw err;
+}
+async function fecharDados(data){
+  const txt=JSON.stringify(data);if(!sync.enc)return txt;
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},sync.enc.key,new TextEncoder().encode(txt)));
+  return JSON.stringify({enc:1,kdf:'PBKDF2-SHA256',it:sync.enc.it||200000,salt:sync.enc.salt,iv:u8b64(iv),ct:u8b64(ct)});
+}
+function mostrarCadeado(obj){
+  let o=document.getElementById('cadeado');
+  if(!o){o=document.createElement('div');o.id='cadeado';
+    o.innerHTML=`<form id="cadForm" autocomplete="on"><div class="cad-ico">🔒</div><h2>Painel protegido</h2><p>Digite a senha para ver os números.</p><input id="cadSenha" type="password" autocomplete="current-password" placeholder="Senha" required><button class="btn primary" type="submit">Entrar</button><div id="cadErr" class="cad-err"></div><p class="cad-obs">Este aparelho fica liberado até você tocar em "trancar este aparelho" no rodapé.</p></form>`;
+    document.body.appendChild(o);
+    o.querySelector('#cadForm').addEventListener('submit',async ev=>{ev.preventDefault();const b=o.querySelector('button');b.disabled=true;b.textContent='Conferindo…';o.querySelector('#cadErr').textContent='';
+      try{const lk=o._obj;const key=await derivarChave(o.querySelector('#cadSenha').value,lk.salt,lk.it);await decifrar(lk,key);await guardarChave(lk.salt,key);o.remove();document.body.classList.remove('trancado');loadRemote(true)}
+      catch(e){o.querySelector('#cadErr').textContent='Senha incorreta.';b.disabled=false;b.textContent='Entrar'}});
+  }
+  o._obj=obj;document.body.classList.add('trancado');setTimeout(()=>{const i=o.querySelector('#cadSenha');i&&i.focus()},50);
+}
+function trancarAparelho(){try{localStorage.removeItem(LS_CHAVE);localStorage.removeItem(LS_KEY)}catch(e){}location.reload()}
 const hhmm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
 function setSync(status,text){sync.status=status;sync.text=text;[$('#syncChip'),$('#syncChip2')].forEach(c=>{if(!c)return;c.className='sync'+(status==='ok'?' ok':status==='busy'?' busy':status==='err'?' err':'');$('span',c).textContent=text;c.title=status==='err'?'Clique para tentar de novo':'Clique para atualizar'})}
 function okText(){return(isEditor()?'Salvo no link':'Ao vivo')+(sync.last?' · '+hhmm(sync.last):'')}
 async function fetchRemote(){
   let r=null;try{r=await fetch(apiUrl()+'?ref='+GH.branch+'&t='+Date.now(),{headers:ghHeaders(),cache:'no-store'})}catch(e){}
-  if(r&&r.ok){const j=await r.json();return{data:j.content?JSON.parse(b64dec(j.content)):null,sha:j.sha}}
+  if(r&&r.ok){const j=await r.json();return{data:j.content?await abrirDados(JSON.parse(b64dec(j.content))):null,sha:j.sha}}
   if(r&&r.status===404)return{data:null,sha:null};
-  try{const p=await fetch(`https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${GH.path}?t=${Date.now()}`,{cache:'no-store'});if(p.ok)return{data:await p.json(),sha:undefined}}catch(e){}
+  try{const p=await fetch(`https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${GH.path}?t=${Date.now()}`,{cache:'no-store'});if(p.ok)return{data:await abrirDados(await p.json()),sha:undefined}}catch(e){if(e&&e.lock)throw e}
   throw new Error(r?'HTTP '+r.status:'offline');
 }
 async function loadRemote(initial){
@@ -1893,7 +1932,7 @@ async function loadRemote(initial){
       sync.localOnly=Object.keys(lo).length?lo:null;try{sync.localOnly?localStorage.setItem(LS_PEND,JSON.stringify(lo)):localStorage.removeItem(LS_PEND)}catch(e){}}
     if(remote){if(state.demo)realState=remote;else{state=remote;writeCache()}}
     sync.loaded=true;sync.last=new Date();setSync('ok',okText());
-  }catch(e){setSync('err',sync.loaded?'Sem conexão — dados podem estar desatualizados':'Sem conexão com o GitHub — cópia local')}
+  }catch(e){if(e&&e.lock){sync.busy=false;setSync('err','Painel protegido por senha');mostrarCadeado(e.lock);return}setSync('err',sync.loaded?'Sem conexão — dados podem estar desatualizados':'Sem conexão com o GitHub — cópia local')}
   finally{sync.busy=false}
   if(!$('#dlg').open)renderAll();
 }
@@ -1905,7 +1944,7 @@ async function pushRemote(){
   try{
     for(let attempt=0;attempt<4;attempt++){
       const d1=[...sync.dirty.dates];const msg=d1.length===1&&!sync.dirty.del.size?`Lançamento ${dShort(d1[0])}`:sync.dirty.del.size&&!d1.length?'Remove lançamento':'Atualiza dados do painel';
-      const body={message:msg,content:b64enc(JSON.stringify(exportable())),branch:GH.branch};if(sync.sha)body.sha=sync.sha;
+      const body={message:msg,content:b64enc(await fecharDados(exportable())),branch:GH.branch};if(sync.sha)body.sha=sync.sha;
       const r=await fetch(apiUrl(),{method:'PUT',headers:ghHeaders(true),body:JSON.stringify(body)});
       if(r.ok){const j=await r.json();sync.sha=j.content&&j.content.sha;if(sync.rev===rev0)clearDirty();sync.last=new Date();setSync('ok',okText());if(sync.rev!==rev0)schedulePush();return}
       if(r.status===409||r.status===422){

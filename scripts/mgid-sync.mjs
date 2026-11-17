@@ -8,6 +8,7 @@
 //   DAYS              quantos dias para trás atualizar (padrão 3)
 //   MGID_API / GITHUB_API  só para testes
 
+import { abrirDados, fecharDados } from './cripto.mjs';
 const TOKEN = String(process.env.MGID_TOKEN || '').trim().replace(/^Bearer\s+/i, '');
 const CLIENT = process.env.MGID_CLIENT_ID || '996870';
 const GH_TOKEN = process.env.GITHUB_TOKEN;
@@ -66,10 +67,10 @@ async function getData() {
   const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=${BRANCH}&t=${Date.now()}`, { headers: ghHeaders });
   if (!r.ok) throw new Error('GitHub GET data.json: HTTP ' + r.status);
   const j = await r.json();
-  return { data: JSON.parse(Buffer.from(j.content, 'base64').toString('utf8')), sha: j.sha };
+  return { data: abrirDados(j.content), sha: j.sha };
 }
 async function putData(data, sha, message) {
-  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify({ message, content: Buffer.from(JSON.stringify(data)).toString('base64'), branch: BRANCH, sha }) });
+  const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify({ message, content: fecharDados(data), branch: BRANCH, sha }) });
   return r.status;
 }
 

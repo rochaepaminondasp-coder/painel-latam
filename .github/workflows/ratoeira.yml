@@ -45,6 +45,7 @@ jobs:
           TABOOLA_ACCOUNT_ID: ${{ secrets.TABOOLA_ACCOUNT_ID }}
           RATOEIRA_MCP_URL: ${{ secrets.RATOEIRA_MCP_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAINEL_SENHA: ${{ secrets.PAINEL_SENHA }}
           MODE: ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'once') && 'once' || 'loop' }}
           DAYS_IN: ${{ inputs.days || '1' }}
         run: |
