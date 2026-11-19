@@ -1,12 +1,12 @@
-name: Cotações PTAX (consulta)
+name: Cotações (consulta)
 on: { workflow_dispatch: { inputs: { de: { required: true }, ate: { required: true } } } }
 jobs:
-  ptax:
+  fx:
     runs-on: ubuntu-latest
     steps:
       - run: |
           for M in USD EUR; do
-            DE=$(date -d "${{ inputs.de }}" +%m-%d-%Y); ATE=$(date -d "${{ inputs.ate }}" +%m-%d-%Y)
-            curl -s "https://olinda.bcb.gov.br/olinda/service/PTAX/versao/v1/odata/CotacaoMoedaPeriodo(moeda=@moeda,dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@moeda='$M'&@dataInicial='$DE'&@dataFinalCotacao='$ATE'&\$format=json&\$select=cotacaoVenda,dataHoraCotacao,tipoBoletim" > $M.json
-            node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1]));const by={};for(const v of j.value){if(v.tipoBoletim!=="Fechamento")continue;by[v.dataHoraCotacao.slice(0,10)]=v.cotacaoVenda}console.log("PTAX_"+process.argv[2]+" "+JSON.stringify(by))' $M.json $M
+            curl -sL "https://api.frankfurter.app/${{ inputs.de }}..${{ inputs.ate }}?from=$M&to=BRL" > $M.json
+            head -c 200 $M.json; echo
+            node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1]));const by={};for(const [d,v] of Object.entries(j.rates||{}))by[d]=v.BRL;console.log("FX_"+process.argv[2]+" "+JSON.stringify(by))' $M.json $M || true
           done
