@@ -461,6 +461,7 @@ body:not(.viewer) .view-only{display:none!important}
 #cadeado input{font:inherit;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);background:var(--card2);color:var(--text);font-size:16px}
 #cadeado .cad-err{color:var(--loss);font-size:13px;min-height:16px}#cadeado .cad-obs{font-size:12px;color:var(--faint)}
 body.trancado>*:not(#cadeado){visibility:hidden}
+.camp-sort{display:flex;align-items:center;gap:8px;font-size:13px;flex-shrink:0}.camp-sort select{font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;border:1px solid var(--line2);background:var(--card2);color:var(--text)}
 </style>
 </head>
 <body>
@@ -875,6 +876,10 @@ function writeCache(){if(state.demo)return;try{localStorage.setItem(LS_KEY,JSON.
 function save(kind,d){if(state.demo)return;writeCache();if(kind){markDirty(kind,d);if(isEditor())schedulePush()}}
 let state=load();
 const ui={range:'today',country:'ALL',platform:'ALL',tab:'overview',from:null,to:null,open:null,ocrMode:'ads',matrix:'roas'};
+/* ordenação do ranking de campanhas (lembrada neste aparelho) */
+const CAMP_SORTS={profit:['Maior lucro',a=>a.profit],sales_desc:['Mais vendas',a=>a.sales],sales_asc:['Menos vendas',a=>-a.sales],conv:['Maior conversão (vendas ÷ cliques)',a=>a.clicks?a.sales/a.clicks:-1],roas:['Maior ROAS',a=>a.roas==null?-1e9:a.roas],spend:['Maior investimento',a=>a.spend]};
+try{ui.campSort=localStorage.getItem('painel-latam-campsort')||'profit'}catch(e){ui.campSort='profit'}
+if(!CAMP_SORTS[ui.campSort])ui.campSort='profit';
 const charts={};
 const fee=()=>num(state.settings.feePct)/100;
 const fOn=k=>{const f=FIELDS.find(x=>x.k===k);return f.always||!!state.settings.fields[f.opt||f.k]};
@@ -1370,6 +1375,7 @@ function renderAds(dates){
   const totSpend=ads.reduce((s,a)=>s+a.spend,0),totSales=ads.reduce((s,a)=>s+a.sales,0),avgCpa=totSales?totSpend/totSales:null;
   const bleed=ads.filter(a=>a.sales===0&&avgCpa&&a.spend>=avgCpa*1.5).sort((a,b)=>b.spend-a.spend);
   const losing=ads.filter(a=>a.sales>0&&a.roas!=null&&a.roas<1).sort((a,b)=>a.profit-b.profit);
+  const sk=CAMP_SORTS[ui.campSort][1],rank=[...ads].sort((a,b)=>(sk(b)-sk(a))||(b.profit-a.profit));
   $('#adsBody').innerHTML=`
     <div class="grid g-21">
       <div class="card best"><div class="trophy">🏆</div>
@@ -1383,11 +1389,12 @@ function renderAds(dates){
         ${losing.slice(0,Math.max(0,3-bleed.length)).map(a=>`<div class="alert"><span class="neg">${ICON.down}</span><span><b>${esc(a.name)}</b><br><span class="muted">${esc(pname(a.p))} · ROAS ${xf(a.roas)}</span></span><span class="num neg">${money(a.profit)}</span></div>`).join('')}
         ${!bleed.length&&!losing.length?`<div class="muted" style="font-size:13.5px">Nenhuma campanha no vermelho neste período. 👏</div>`:''}</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de campanhas</h3><div class="sub">Clique numa campanha para ver o gasto e as vendas por país · ordenado por lucro${ads.some(a=>a.est)?' · <b>≈</b> = estimado: as vendas e o faturamento do país divididos entre as campanhas dele, proporcional aos initiate checkouts (ou aos cliques, quando não há checkout). Para o número exato, lance as vendas na própria campanha.':''}</div></div></div>
+    <div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Ranking de campanhas</h3><div class="sub">Clique numa campanha para ver o gasto e as vendas por país · ordenado por ${esc(CAMP_SORTS[ui.campSort][0].toLowerCase())}${ads.some(a=>a.est)?' · <b>≈</b> = estimado: as vendas e o faturamento do país divididos entre as campanhas dele, proporcional aos initiate checkouts (ou aos cliques, quando não há checkout). Para o número exato, lance as vendas na própria campanha.':''}</div></div><label class="camp-sort"><span class="muted">Ordenar por</span> <select id="campSort">${Object.entries(CAMP_SORTS).map(([k,[l]])=>`<option value="${k}" ${ui.campSort===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label></div>
       <div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>#</th><th>Campanha</th><th>Plataforma</th><th class="r">Dias</th><th class="r">Investimento</th><th class="r">Cliques</th><th class="r">CPC</th><th class="r">Checkouts</th><th class="r">Vendas</th><th class="r">CPA</th><th class="r">Faturamento</th><th class="r">EPC</th><th class="r">ROAS</th><th class="r">Lucro</th></tr></thead>
-      <tbody>${ads.map((a,i)=>{const k=a.p+'|'+norm(a.name||'').trim(),cl=(byCamp[k]||[]).filter(x=>x.spend>0.5||x.sales||x.ups),multi=cl.length>1||cl.some(x=>x.multi),open=ui.openCamp===k;return`<tr class="main-row ${i===0&&a.profit>0?'top1':''}" data-k="${esc(k)}" title="Clique para ver os países"><td class="faint num">${open?'▾':'▸'} ${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${multi?`<span class="via-tag">${cl.length} países</span>`:cl.map(x=>flag(x.cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?(a.icEst?'<span class="faint">≈</span>':'')+intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>${open?campDetail(cl):''}`}).join('')}</tbody></table></div></div>
+      <tbody>${rank.map((a,i)=>{const k=a.p+'|'+norm(a.name||'').trim(),cl=(byCamp[k]||[]).filter(x=>x.spend>0.5||x.sales||x.ups),multi=cl.length>1||cl.some(x=>x.multi),open=ui.openCamp===k;return`<tr class="main-row ${i===0&&a.profit>0&&(ui.campSort==='profit'||ui.campSort==='sales_desc')?'top1':''}" data-k="${esc(k)}" title="Clique para ver os países"><td class="faint num">${open?'▾':'▸'} ${i+1}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.name)}"><b>${esc(a.name)}</b> ${multi?`<span class="via-tag">${cl.length} países</span>`:cl.map(x=>flag(x.cc)).join(' ')}</td><td>${pbadge(a.p)}</td><td class="r num">${a.nd}</td><td class="r num">${money(a.spend)}</td><td class="r num">${a.clicks?intf(a.clicks):'—'}</td><td class="r num">${moneyP(a.cpc)}</td><td class="r num">${a.ic?(a.icEst?'<span class="faint">≈</span>':'')+intf(a.ic):'—'}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${a.est?a.sales.toLocaleString('pt-BR',{maximumFractionDigits:1}):intf(a.sales)}</td><td class="r num">${a.cpa==null?'—':money(a.cpa)}</td><td class="r num">${a.est?'<span class="faint">≈</span>':''}${money(a.rev)}</td><td class="r num">${moneyP(a.epc)}</td><td class="r num ${a.roas==null?'':a.roas>=1?'pos':'neg'}">${xf(a.roas)}</td><td class="r num ${a.profit>=0?'pos':'neg'}">${money(a.profit)}</td></tr>${open?campDetail(cl):''}`}).join('')}</tbody></table></div></div>
     <div class="card"><div class="card-h"><div><h3>ROAS por campanha</h3><div class="sub">Top 10 · linha de corte em 1,0</div></div></div><div class="chart-box" style="height:${Math.max(200,Math.min(10,ads.length)*40+40)}px"><canvas id="chAds"></canvas></div></div>`;
   $$('#adsBody tr.main-row').forEach(tr=>tr.onclick=()=>{ui.openCamp=ui.openCamp===tr.dataset.k?null:tr.dataset.k;renderAds(dates);renderAdsChart(dates,tc())});
+  const cs=$('#campSort');if(cs)cs.onchange=()=>{ui.campSort=cs.value;try{localStorage.setItem('painel-latam-campsort',cs.value)}catch(e){}renderAds(dates);renderAdsChart(dates,tc())};
 }
 
 /* ================= countries tab ================= */
