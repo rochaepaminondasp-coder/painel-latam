@@ -76,7 +76,10 @@ async function getData() {
   const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json?ref=${BRANCH}&t=${Date.now()}`, { headers: ghHeaders });
   if (!r.ok) throw new Error('GitHub GET data.json: HTTP ' + r.status);
   const j = await r.json();
-  return { data: abrirDados(j.content), sha: j.sha };
+  // acima de 1 MB a API não devolve o conteúdo: busca o blob pelo git_url
+  let content = j.content;
+  if (!content && j.git_url) { const b = await fetch(j.git_url, { headers: ghHeaders }); if (!b.ok) throw new Error('GitHub blob data.json: HTTP ' + b.status); content = (await b.json()).content; }
+  return { data: abrirDados(content), sha: j.sha };
 }
 async function putData(data, sha, message) {
   const r = await fetch(`${GH_API}/repos/${REPO}/contents/data.json`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify({ message, content: fecharDados(data), branch: BRANCH, sha }) });

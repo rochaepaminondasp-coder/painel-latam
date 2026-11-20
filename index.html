@@ -1922,7 +1922,12 @@ function setSync(status,text){sync.status=status;sync.text=text;[$('#syncChip'),
 function okText(){return(isEditor()?'Salvo no link':'Ao vivo')+(sync.last?' · '+hhmm(sync.last):'')}
 async function fetchRemote(){
   let r=null;try{r=await fetch(apiUrl()+'?ref='+GH.branch+'&t='+Date.now(),{headers:ghHeaders(),cache:'no-store'})}catch(e){}
-  if(r&&r.ok){const j=await r.json();return{data:j.content?await abrirDados(JSON.parse(b64dec(j.content))):null,sha:j.sha}}
+  if(r&&r.ok){const j=await r.json();let c=j.content;
+    // acima de 1 MB a API não devolve o conteúdo: lê o blob (git_url)
+    if(!c&&j.git_url&&fetchRemote._sha===j.sha&&fetchRemote._c)c=fetchRemote._c;
+    if(!c&&j.git_url){try{const b=await fetch(j.git_url,{headers:ghHeaders(),cache:'no-store'});if(b.ok)c=(await b.json()).content}catch(e){}if(!c)throw new Error('não consegui ler os dados (arquivo grande)')}
+    if(c){fetchRemote._sha=j.sha;fetchRemote._c=c}
+    return{data:c?await abrirDados(JSON.parse(b64dec(c))):null,sha:j.sha}}
   if(r&&r.status===404)return{data:null,sha:null};
   try{const p=await fetch(`https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${GH.path}?t=${Date.now()}`,{cache:'no-store'});if(p.ok)return{data:await abrirDados(await p.json()),sha:undefined}}catch(e){if(e&&e.lock)throw e}
   throw new Error(r?'HTTP '+r.status:'offline');
